@@ -21,15 +21,18 @@ namespace Intersect.GameObjects.Maps
             Layers = new List<MapLayerInfo>();
 
             // Below Player
-            Layers.Add(new MapLayerInfo(MapLayerRegion.Lower, MapLayerIntersect.Ground));
-            Layers.Add(new MapLayerInfo(MapLayerRegion.Lower, MapLayerIntersect.Mask));
-            Layers.Add(new MapLayerInfo(MapLayerRegion.Lower, MapLayerIntersect.Mask2));
+            Layers.Add(new MapLayerInfo(MapLayerRegion.Lower, MapLayerIntersect.Ground, 0));
+            Layers.Add(new MapLayerInfo(MapLayerRegion.Lower, MapLayerIntersect.None));
+            Layers.Add(new MapLayerInfo(MapLayerRegion.Lower, MapLayerIntersect.None));
+            Layers.Add(new MapLayerInfo(MapLayerRegion.Lower, MapLayerIntersect.Mask, 1));
+            Layers.Add(new MapLayerInfo(MapLayerRegion.Lower, MapLayerIntersect.Mask2, 2));
+            Layers.Add(new MapLayerInfo(MapLayerRegion.Lower, MapLayerIntersect.None));
 
             // Above Player
-            Layers.Add(new MapLayerInfo(MapLayerRegion.Middle, MapLayerIntersect.Fringe));
+            Layers.Add(new MapLayerInfo(MapLayerRegion.Middle, MapLayerIntersect.Fringe, 3));
 
             // Above Player
-            Layers.Add(new MapLayerInfo(MapLayerRegion.Upper, MapLayerIntersect.Fringe2));
+            Layers.Add(new MapLayerInfo(MapLayerRegion.Upper, MapLayerIntersect.Fringe2, 4));
         }
 
         public static bool isValid()

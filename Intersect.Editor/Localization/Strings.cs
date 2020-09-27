@@ -4304,10 +4304,13 @@ Tick timer saved in server config.json.";
             public static Dictionary<int, LocalizedString> layers = new Dictionary<int, LocalizedString>
             {
                 {0, @"Ground"},
-                {1, @"Mask"},
-                {2, @"Mask 2"},
-                {3, @"Fringe"},
-                {4, @"Fringe 2"}
+                {1, @"Ground 2"},
+                {2, @"Ground 3"},
+                {3, @"Mask"},
+                {4, @"Mask 2"},
+                {5, @"Mask 3"},
+                {6, @"Fringe"},
+                {7, @"Fringe 2"}
             };
 
             public static LocalizedString normal = @"Normal";
