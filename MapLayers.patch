@@ -1,0 +1,3119 @@
+From 17fb4a162498a6511ebe577dc5b255cc346edb7e Mon Sep 17 00:00:00 2001
+From: lunarsourcellc <lunarsourcellc@gmail.com>
+Date: Tue, 23 Jun 2020 16:53:30 -0400
+Subject: [PATCH] AdditionalMapLayers
+
+---
+ Intersect (Core)/Config/Options.cs            |    2 +-
+ Intersect (Core)/Enums/MapLayerIntersect.cs   |   24 +
+ Intersect (Core)/Enums/MapLayerRegion.cs      |   20 +
+ .../GameObjects/Maps/MapAutotiles.cs          |   14 +-
+ Intersect (Core)/GameObjects/Maps/MapBase.cs  |   12 +-
+ .../GameObjects/Maps/MapLayerBase.cs          |   19 +
+ .../GameObjects/Maps/MapLayers.cs             |  132 +++
+ Intersect (Core)/Intersect (Core).csproj      |    4 +
+ Intersect.Client/Maps/MapInstance.cs          |   66 +-
+ Intersect.Editor/Core/Graphics.cs             |   51 +-
+ .../Forms/DockingElements/frmMapEditor.cs     |  216 ++--
+ .../DockingElements/frmMapLayers.Designer.cs  |  131 +-
+ .../Forms/DockingElements/frmMapLayers.cs     |   77 +-
+ .../Forms/DockingElements/frmMapLayers.resx   |    7 +
+ Intersect.Editor/Forms/frmMain.cs             |   15 +-
+ Intersect.Editor/Localization/Strings.cs      |    2 +-
+ Intersect.Server/Database/DbInterface.cs      |  110 +-
+ .../Database/GameData/GameContext.cs          |    3 +
+ .../GameData/Migrations/Beta6Migration.cs     |    4 +-
+ Intersect.Server/Intersect.Server.csproj      |    5 +
+ Intersect.Server/Localization/Strings.cs      |    3 +
+ Intersect.Server/Maps/MapInstance.cs          |   13 +
+ Intersect.Server/Maps/MapLayers.cs            |  167 +++
+ ...0605015121_AdditionalMapLayers.Designer.cs | 1052 +++++++++++++++++
+ .../20200605015121_AdditionalMapLayers.cs     |   37 +
+ 25 files changed, 1907 insertions(+), 279 deletions(-)
+ create mode 100644 Intersect (Core)/Enums/MapLayerIntersect.cs
+ create mode 100644 Intersect (Core)/Enums/MapLayerRegion.cs
+ create mode 100644 Intersect (Core)/GameObjects/Maps/MapLayerBase.cs
+ create mode 100644 Intersect (Core)/GameObjects/Maps/MapLayers.cs
+ create mode 100644 Intersect.Server/Maps/MapLayers.cs
+ create mode 100644 Intersect.Server/Migrations/Game/20200605015121_AdditionalMapLayers.Designer.cs
+ create mode 100644 Intersect.Server/Migrations/Game/20200605015121_AdditionalMapLayers.cs
+
+diff --git a/Intersect (Core)/Config/Options.cs b/Intersect (Core)/Config/Options.cs
+index d7f726fa..5be9589c 100644
+--- a/Intersect (Core)/Config/Options.cs	
++++ b/Intersect (Core)/Config/Options.cs	
+@@ -267,7 +267,7 @@ public bool ShouldSerializeSecurityOpts()
+ 
+         // TODO: Clean these up
+         //Values that cannot easily be changed:
+-        public const int LayerCount = 5;
++        //public const int LayerCount = 5;
+ 
+         public const int MaxStats = 5;
+ 
+diff --git a/Intersect (Core)/Enums/MapLayerIntersect.cs b/Intersect (Core)/Enums/MapLayerIntersect.cs
+new file mode 100644
+index 00000000..c9ed06f6
+--- /dev/null
++++ b/Intersect (Core)/Enums/MapLayerIntersect.cs	
+@@ -0,0 +1,24 @@
++﻿using System;
++using System.Collections.Generic;
++using System.Linq;
++using System.Text;
++using System.Threading.Tasks;
++
++namespace Intersect.Enums
++{
++    public enum MapLayerIntersect : int
++    {
++        None = -1,
++
++        Ground,
++
++        Mask,
++
++        Mask2,
++
++        Fringe,
++
++        Fringe2
++
++    }
++}
+diff --git a/Intersect (Core)/Enums/MapLayerRegion.cs b/Intersect (Core)/Enums/MapLayerRegion.cs
+new file mode 100644
+index 00000000..d91e489d
+--- /dev/null
++++ b/Intersect (Core)/Enums/MapLayerRegion.cs	
+@@ -0,0 +1,20 @@
++﻿using System;
++using System.Collections.Generic;
++using System.Linq;
++using System.Text;
++using System.Threading.Tasks;
++
++namespace Intersect.Enums
++{
++
++    public enum MapLayerRegion : byte
++    {
++
++        Lower = 0,
++
++        Middle,
++
++        Upper
++
++    }
++}
+diff --git a/Intersect (Core)/GameObjects/Maps/MapAutotiles.cs b/Intersect (Core)/GameObjects/Maps/MapAutotiles.cs
+index aa2c3c71..ef5ff991 100644
+--- a/Intersect (Core)/GameObjects/Maps/MapAutotiles.cs	
++++ b/Intersect (Core)/GameObjects/Maps/MapAutotiles.cs	
+@@ -381,7 +381,7 @@ private void CreateFields()
+                 for (var y = 0; y < Options.MapHeight; y++)
+                 {
+                     Autotile[x, y] = new AutoTileCls();
+-                    for (var i = 0; i < Options.LayerCount; i++)
++                    for (var i = 0; i < MapLayers.Layers.Count; i++)
+                     {
+                         Autotile[x, y].Layer[i] = new QuarterTileCls()
+                         {
+@@ -401,7 +401,7 @@ public void InitAutotiles(MapBase[,] surroundingMaps)
+                     CreateFields();
+                 }
+ 
+-                for (var i = 0; i < Options.LayerCount; i++)
++                for (var i = 0; i < MapLayers.Layers.Count; i++)
+                 {
+                     for (var x = 0; x < Options.MapWidth; x++)
+                     {
+@@ -438,7 +438,7 @@ public bool UpdateAutoTiles(int x, int y, MapBase[,] surroundingMaps)
+                         }
+ 
+                         var oldautotile = Autotile[x1, y1].Copy();
+-                        for (var i = 0; i < Options.LayerCount; i++)
++                        for (var i = 0; i < MapLayers.Layers.Count; i++)
+                         {
+                             // calculate the subtile positions and place them
+                             CalculateAutotile(x1, y1, i, surroundingMaps);
+@@ -488,7 +488,7 @@ public void UpdateAutoTiles(int x, int y, int layer, MapBase[,] surroundingMaps)
+ 
+         public void UpdateCliffAutotiles(MapBase curMap, int layer)
+         {
+-            if (layer >= Options.LayerCount)
++            if (layer >= MapLayers.Layers.Count)
+             {
+                 return;
+             }
+@@ -2638,12 +2638,12 @@ public class QuarterTileCls
+     public class AutoTileCls
+     {
+ 
+-        public QuarterTileCls[] Layer = new QuarterTileCls[Options.LayerCount + 1];
++        public QuarterTileCls[] Layer = new QuarterTileCls[MapLayers.Layers.Count + 1];
+ 
+         public AutoTileCls Copy()
+         {
+             var autotile = new AutoTileCls();
+-            for (var i = 0; i < Options.LayerCount; i++)
++            for (var i = 0; i < MapLayers.Layers.Count; i++)
+             {
+                 autotile.Layer[i] = new QuarterTileCls()
+                 {
+@@ -2665,7 +2665,7 @@ public AutoTileCls Copy()
+ 
+         public bool Equals(AutoTileCls autotile)
+         {
+-            for (var i = 0; i < Options.LayerCount; i++)
++            for (var i = 0; i < MapLayers.Layers.Count; i++)
+             {
+                 if (autotile.Layer[i].RenderState != Layer[i].RenderState)
+                 {
+diff --git a/Intersect (Core)/GameObjects/Maps/MapBase.cs b/Intersect (Core)/GameObjects/Maps/MapBase.cs
+index b0af922f..8269eea1 100644
+--- a/Intersect (Core)/GameObjects/Maps/MapBase.cs	
++++ b/Intersect (Core)/GameObjects/Maps/MapBase.cs	
+@@ -28,7 +28,7 @@ public class MapBase : DatabaseObject<MapBase>
+         [NotMapped] public List<Guid> EventIds = new List<Guid>();
+ 
+         //Core Data
+-        [JsonIgnore] [NotMapped] public TileArray[] Layers = new TileArray[Options.LayerCount];
++        [JsonIgnore] [NotMapped] public TileArray[] Layers = new TileArray[MapLayers.Layers.Count];
+ 
+         //Map Attributes
+         private MapAttribute[,] mAttributes = new MapAttribute[Options.MapWidth, Options.MapHeight];
+@@ -47,8 +47,8 @@ public MapBase(Guid id) : base(id)
+             //Create empty tile array and then compress it down
+             if (Layers == null || Layers[0].Tiles == null)
+             {
+-                Layers = new TileArray[Options.LayerCount];
+-                for (var i = 0; i < Options.LayerCount; i++)
++                Layers = new TileArray[MapLayers.Layers.Count];
++                for (var i = 0; i < MapLayers.Layers.Count; i++)
+                 {
+                     Layers[i].Tiles = new Tile[Options.MapWidth, Options.MapHeight];
+                     for (var x = 0; x < Options.MapWidth; x++)
+@@ -93,12 +93,12 @@ public MapBase(MapBase mapBase) : base(mapBase?.Id ?? Guid.Empty)
+                     IsIndoors = mapBase.IsIndoors;
+                     if (Layers != null && mapBase.Layers != null)
+                     {
+-                        if (Layers.Length < Options.LayerCount)
++                        if (Layers.Length < MapLayers.Layers.Count)
+                         {
+-                            Layers = new TileArray[Options.LayerCount];
++                            Layers = new TileArray[MapLayers.Layers.Count];
+                         }
+ 
+-                        for (var i = 0; i < Options.LayerCount; i++)
++                        for (var i = 0; i < MapLayers.Layers.Count; i++)
+                         {
+                             Layers[i].Tiles = new Tile[Options.MapWidth, Options.MapHeight];
+                             for (var x = 0; x < Options.MapWidth; x++)
+diff --git a/Intersect (Core)/GameObjects/Maps/MapLayerBase.cs b/Intersect (Core)/GameObjects/Maps/MapLayerBase.cs
+new file mode 100644
+index 00000000..0508d2e8
+--- /dev/null
++++ b/Intersect (Core)/GameObjects/Maps/MapLayerBase.cs	
+@@ -0,0 +1,19 @@
++﻿using System;
++using System.Collections.Generic;
++using System.Linq;
++using System.Text;
++using System.Threading.Tasks;
++
++namespace Intersect.GameObjects.Maps
++{
++    public class MapLayerBase
++    {
++        public int ID { get; set; }
++
++        public int MapLayerRegionID { get; set; }
++
++        public int IntersectLayerID { get; set; }
++
++        public int OldLayerID { get; set; }
++    }
++}
+diff --git a/Intersect (Core)/GameObjects/Maps/MapLayers.cs b/Intersect (Core)/GameObjects/Maps/MapLayers.cs
+new file mode 100644
+index 00000000..b84ac369
+--- /dev/null
++++ b/Intersect (Core)/GameObjects/Maps/MapLayers.cs	
+@@ -0,0 +1,132 @@
++﻿using Intersect.Enums;
++using Intersect.Logging;
++using System;
++using System.Collections.Generic;
++using System.Linq;
++using System.Runtime.InteropServices;
++using System.Text;
++using System.Threading.Tasks;
++
++namespace Intersect.GameObjects.Maps
++{
++
++    public static class MapLayers
++    {
++
++        public static List<MapLayerInfo> Layers { get; }
++
++        static MapLayers()
++        {
++
++            Layers = new List<MapLayerInfo>();
++
++            // Below Player
++            Layers.Add(new MapLayerInfo(MapLayerRegion.Lower, MapLayerIntersect.Ground));
++            Layers.Add(new MapLayerInfo(MapLayerRegion.Lower, MapLayerIntersect.Mask));
++            Layers.Add(new MapLayerInfo(MapLayerRegion.Lower, MapLayerIntersect.Mask2));
++
++            // Above Player
++            Layers.Add(new MapLayerInfo(MapLayerRegion.Middle, MapLayerIntersect.Fringe));
++
++            // Above Player
++            Layers.Add(new MapLayerInfo(MapLayerRegion.Upper, MapLayerIntersect.Fringe2));
++        }
++
++        public static bool isValid()
++        {
++            int tmpID = 0;
++            int tmpIntersectID = 0;
++            bool blnFound = false;
++
++            try
++            {
++                // Make sure layer regions and intersect layers are in order 
++                for (int x = 0; x < Layers.Count; x++)
++                {
++                    var tmpLayerRegion = Layers[x].Region;
++                    var tmpIntersectLayer = (int)Layers[x].IntersectLayer;
++
++                    if ((int)tmpID > (int)tmpLayerRegion)
++                        return false;
++
++                    if ((int)tmpIntersectLayer >= (int)MapLayerIntersect.Ground)
++                        if ((int)tmpIntersectID > (int)tmpIntersectLayer)
++                            return false;
++
++                    tmpID = (int)Layers[x].Region;
++
++                    if ((int)tmpIntersectLayer >= (int)MapLayerIntersect.Ground)
++                        tmpIntersectID = (int)tmpIntersectLayer;
++                }
++
++                // Make sure all intersect layers are found and only 1 of each
++                for (int x = 0; x < 5; x++)
++                {
++
++                    blnFound = false;
++                    for (int y = 0; y < Layers.Count; y++)
++                    {
++                        if ((int)Layers[y].IntersectLayer == (int)MapLayerIntersect.None)
++                            continue;
++
++                        if ((int)Layers[y].IntersectLayer == x)
++                        {
++                            blnFound = true;
++
++                            for (int z = 0; z < Layers.Count; z++)
++                            {
++                                if ((int)Layers[z].IntersectLayer == x && z != y)
++                                    return false;
++                            }
++
++                        }
++
++                    }
++
++                    if (!blnFound)
++                        return false;
++
++                }
++
++                // make sure old layer is only mentioned once
++                for (int x = 0; x < Layers.Count; x++)
++                {
++                    if (Layers[x].OldLayerID == -1)
++                        continue;
++
++                    for (int y = 0; y < Layers.Count; y++)
++                    {
++                        if (Layers[x].OldLayerID == Layers[y].OldLayerID && x != y)
++                            return false;
++                    }
++                }
++            }
++            catch (Exception ex)
++            {
++                Log.Error("Error determining map layer definitions are valid. " + ex.Message);
++                return false;
++            }
++
++            return true;
++        }
++
++    }
++
++    public class MapLayerInfo
++    {
++
++        public MapLayerRegion Region { get; set; }
++
++        public MapLayerIntersect IntersectLayer { get; set; }
++
++        public int OldLayerID { get; set; }
++
++        public MapLayerInfo(MapLayerRegion _region, MapLayerIntersect _intersectlayer, int _oldlayerID = -1)
++        {
++            Region = _region;
++            IntersectLayer = _intersectlayer;
++            OldLayerID = _oldlayerID;
++        }
++
++    }
++}
+diff --git a/Intersect (Core)/Intersect (Core).csproj b/Intersect (Core)/Intersect (Core).csproj
+index d427e9af..19989996 100644
+--- a/Intersect (Core)/Intersect (Core).csproj	
++++ b/Intersect (Core)/Intersect (Core).csproj	
+@@ -222,6 +222,8 @@
+     <Compile Include="Console.cs" />
+     <Compile Include="Config\SmtpSettings.cs" />
+     <Compile Include="CustomColors.cs" />
++	<Compile Include="Enums\MapLayerIntersect.cs" />
++    <Compile Include="Enums\MapLayerRegion.cs" />
+     <Compile Include="Enums\ItemHandling.cs" />
+     <Compile Include="ErrorHandling\ExceptionInfo.cs" />
+     <Compile Include="Extensions\ArrayExtensions.cs" />
+@@ -230,6 +232,8 @@
+     <Compile Include="Extensions\PropertyInfoExtensions.cs" />
+     <Compile Include="Extensions\LogLevelExtensions.cs" />
+     <Compile Include="GameObjects\Events\VariableMod.cs" />
++    <Compile Include="GameObjects\Maps\MapLayerBase.cs" />
++    <Compile Include="GameObjects\Maps\MapLayers.cs" />
+     <Compile Include="GameObjects\Switches and Variables\VariableValue.cs" />
+     <Compile Include="IO\ConsoleContext.cs" />
+     <Compile Include="IO\ConsoleWriter.cs" />
+diff --git a/Intersect.Client/Maps/MapInstance.cs b/Intersect.Client/Maps/MapInstance.cs
+index f05675d5..fd3469c2 100644
+--- a/Intersect.Client/Maps/MapInstance.cs
++++ b/Intersect.Client/Maps/MapInstance.cs
+@@ -92,15 +92,15 @@ public class MapInstance : MapBase, IGameObject<Guid, MapInstance>
+         private bool mTexturesFound = false;
+ 
+         private Dictionary<object, GameTileBuffer[]>[] mTileBufferDict =
+-            new Dictionary<object, GameTileBuffer[]>[Options.LayerCount];
++            new Dictionary<object, GameTileBuffer[]>[MapLayers.Layers.Count];
+ 
+         private GameTileBuffer[][][] mTileBuffers; //Array is layer, autotile frame, buffer index
+ 
+         //Initialization
+         public MapInstance(Guid id) : base(id)
+         {
+-            mTileBuffers = new GameTileBuffer[Options.LayerCount][][];
+-            for (var i = 0; i < Options.LayerCount; i++)
++            mTileBuffers = new GameTileBuffer[MapLayers.Layers.Count][][];
++            for (var i = 0; i < MapLayers.Layers.Count; i++)
+             {
+                 mTileBuffers[i] = new GameTileBuffer[3][]; //3 autotile frames
+             }
+@@ -149,7 +149,7 @@ private void CacheTextures()
+         {
+             if (mTexturesFound == false && GameContentManager.Current.TilesetsLoaded)
+             {
+-                for (var i = 0; i < Options.LayerCount; i++)
++                for (var i = 0; i < MapLayers.Layers.Count; i++)
+                 {
+                     for (var x = 0; x < Options.MapWidth; x++)
+                     {
+@@ -322,7 +322,7 @@ private void HandleMapLoaded(MapInstance map)
+                 {
+                     for (var y = 0; y < Options.MapHeight; y++)
+                     {
+-                        for (var i = 0; i < Options.LayerCount; i++)
++                        for (var i = 0; i < MapLayers.Layers.Count; i++)
+                         {
+                             if (Layers[i].Tiles[x, y].Autotile == MapAutotiles.AUTOTILE_CLIFF)
+                             {
+@@ -567,7 +567,7 @@ private void HideActiveAnimations()
+ 
+         public void BuildVBOs()
+         {
+-            for (var i = 0; i < Options.LayerCount; i++)
++            for (var i = 0; i < MapLayers.Layers.Count; i++)
+             {
+                 mTileBuffers[i] = DrawMapLayer(i, GetX(), GetY());
+                 for (var y = 0; y < 3; y++)
+@@ -582,7 +582,7 @@ public void BuildVBOs()
+ 
+         public void DestroyVBOs()
+         {
+-            for (var i = 0; i < Options.LayerCount; i++)
++            for (var i = 0; i < MapLayers.Layers.Count; i++)
+             {
+                 for (var y = 0; y < 3; y++)
+                 {
+@@ -619,31 +619,45 @@ public void DestroyVBOs()
+                 BuildVBOs();
+             }
+ 
+-            var drawLayerStart = 0;
+-            var drawLayerEnd = 2;
+-
+-            if (layer == 1)
+-            {
+-                drawLayerStart = 3;
+-                drawLayerEnd = 3;
+-            }
+-
+-            if (layer == 2)
+-            {
+-                drawLayerStart = 4;
+-                drawLayerEnd = 4;
+-            }
+-
+-            for (var x = drawLayerStart; x <= drawLayerEnd; x++)
++            for (var x = 0; x < MapLayers.Layers.Count; x++)
+             {
+-                if (mTileBuffers[x][Globals.AnimFrame] != null)
++                if ((int)MapLayers.Layers[x].Region == layer)
+                 {
+-                    for (var i = 0; i < mTileBuffers[x][Globals.AnimFrame].Length; i++)
++                    if (mTileBuffers[x][Globals.AnimFrame] != null)
+                     {
+-                        Graphics.Renderer.DrawTileBuffer(mTileBuffers[x][Globals.AnimFrame][i]);
++                        for (var i = 0; i < mTileBuffers[x][Globals.AnimFrame].Length; i++)
++                        {
++                            Graphics.Renderer.DrawTileBuffer(mTileBuffers[x][Globals.AnimFrame][i]);
++                        }
+                     }
+                 }
+             }
++
++            //var drawLayerStart = 0;
++            //var drawLayerEnd = 2;
++
++            //if (layer == 1)
++            //{
++            //    drawLayerStart = 3;
++            //    drawLayerEnd = 3;
++            //}
++
++            //if (layer == 2)
++            //{
++            //    drawLayerStart = 4;
++            //    drawLayerEnd = 4;
++            //}
++
++            //for (var x = drawLayerStart; x <= drawLayerEnd; x++)
++            //{
++            //    if (mTileBuffers[x][Globals.AnimFrame] != null)
++            //    {
++            //        for (var i = 0; i < mTileBuffers[x][Globals.AnimFrame].Length; i++)
++            //        {
++            //            Graphics.Renderer.DrawTileBuffer(mTileBuffers[x][Globals.AnimFrame][i]);
++            //        }
++            //    }
++            //}
+         }
+ 
+         public void DrawItemsAndLights()
+diff --git a/Intersect.Editor/Core/Graphics.cs b/Intersect.Editor/Core/Graphics.cs
+index 1fbf2ef4..ffe4e5ab 100644
+--- a/Intersect.Editor/Core/Graphics.cs
++++ b/Intersect.Editor/Core/Graphics.cs
+@@ -337,7 +337,7 @@ public static void Render()
+                             DrawMapOverlay(null);
+                         }
+ 
+-                        if (!HideDarkness || Globals.CurrentLayer == Options.LayerCount + 1)
++                        if (!HideDarkness || Globals.CurrentLayer == MapLayers.Layers.Count + 1)
+                         {
+                             OverlayDarkness(null);
+                         }
+@@ -478,8 +478,8 @@ RenderTarget2D renderTarget2D
+ 
+             int x1 = 0, y1 = 0, x2 = 0, y2 = 0, z1 = 0, z2 = 3, xoffset = 0, yoffset = 0;
+             int dragxoffset = 0, dragyoffset = 0;
+-            if (Globals.CurrentTool == (int) EditingTool.Rectangle ||
+-                Globals.CurrentTool == (int) EditingTool.Selection)
++            if (Globals.CurrentTool == (int)EditingTool.Rectangle ||
++                Globals.CurrentTool == (int)EditingTool.Selection)
+             {
+                 if (selW < 0)
+                 {
+@@ -494,10 +494,29 @@ RenderTarget2D renderTarget2D
+                 }
+             }
+ 
+-            if (layer == 1)
++            if (layer == 0)
++            {
++                for (var x = MapLayers.Layers.Count - 1; x >= 0; x--)
++                {
++                    if (MapLayers.Layers[x].Region == MapLayerRegion.Lower)
++                    {
++                        z2 = x+1;
++                        break;
++                    }
++                }
++            } 
++            else
+             {
+-                z1 = 3;
+-                z2 = 5;
++                for (var x = 0; x < MapLayers.Layers.Count; x++)
++                {
++                    if (MapLayers.Layers[x].Region == MapLayerRegion.Middle || MapLayers.Layers[x].Region == MapLayerRegion.Upper)
++                    {
++                        z1 = x;
++                        break;
++                    }
++                }
++
++                z2 = MapLayers.Layers.Count;
+             }
+ 
+             x1 = 0;
+@@ -560,7 +579,7 @@ RenderTarget2D renderTarget2D
+                         }
+                         else
+                         {
+-                            if (Globals.CurrentLayer == Options.LayerCount) //Attributes
++                            if (Globals.CurrentLayer == MapLayers.Layers.Count) //Attributes
+                             {
+                                 if (Globals.CurrentTool == (int) EditingTool.Pen)
+                                 {
+@@ -584,13 +603,13 @@ RenderTarget2D renderTarget2D
+                                     }
+                                 }
+                             }
+-                            else if (Globals.CurrentLayer == Options.LayerCount + 1) //Lights
++                            else if (Globals.CurrentLayer == MapLayers.Layers.Count + 1) //Lights
+                             {
+                             }
+-                            else if (Globals.CurrentLayer == Options.LayerCount + 2) //Events
++                            else if (Globals.CurrentLayer == MapLayers.Layers.Count + 2) //Events
+                             {
+                             }
+-                            else if (Globals.CurrentLayer == Options.LayerCount + 3) //NPCS
++                            else if (Globals.CurrentLayer == MapLayers.Layers.Count + 3) //NPCS
+                             {
+                             }
+                             else if (Globals.CurrentTileset != null)
+@@ -909,7 +928,7 @@ private static void DrawSelectionRect()
+             if (!HideTilePreview || Globals.Dragging)
+             {
+                 tmpMap = TilePreviewStruct;
+-                if (Globals.CurrentLayer == Options.LayerCount) //Attributes
++                if (Globals.CurrentLayer == MapLayers.Layers.Count) //Attributes
+                 {
+                     //Draw attributes
+                     for (var x = 0; x < Options.MapWidth; x++)
+@@ -944,10 +963,10 @@ private static void DrawSelectionRect()
+                         }
+                     }
+                 }
+-                else if (Globals.CurrentLayer == Options.LayerCount + 1) //Lights
++                else if (Globals.CurrentLayer == MapLayers.Layers.Count + 1) //Lights
+                 {
+                 }
+-                else if (Globals.CurrentLayer == Options.LayerCount + 2) //Events
++                else if (Globals.CurrentLayer == MapLayers.Layers.Count + 2) //Events
+                 {
+                     for (var x = 0; x < Options.MapWidth; x++)
+                     {
+@@ -975,7 +994,7 @@ private static void DrawSelectionRect()
+                         }
+                     }
+                 }
+-                else if (Globals.CurrentLayer == Options.LayerCount + 3) //NPCS
++                else if (Globals.CurrentLayer == MapLayers.Layers.Count + 3) //NPCS
+                 {
+                     for (var i = 0; i < tmpMap.Spawns.Count; i++)
+                     {
+@@ -1612,7 +1631,7 @@ public static Bitmap ScreenShotMap()
+                 DrawMapOverlay(sScreenShotRenderTexture);
+             }
+ 
+-            if (!Database.GridHideDarkness || Globals.CurrentLayer == Options.LayerCount + 1)
++            if (!Database.GridHideDarkness || Globals.CurrentLayer == MapLayers.Layers.Count + 1)
+             {
+                 ClearDarknessTexture(sScreenShotRenderTexture, true);
+                 OverlayDarkness(sScreenShotRenderTexture, true);
+@@ -1852,7 +1871,7 @@ private static void OverlayDarkness(RenderTarget2D target, bool screenShotting =
+             );
+ 
+             ////Draw Light Attribute Icons
+-            if (Globals.CurrentLayer != Options.LayerCount + 1)
++            if (Globals.CurrentLayer != MapLayers.Layers.Count + 1)
+             {
+                 return;
+             }
+diff --git a/Intersect.Editor/Forms/DockingElements/frmMapEditor.cs b/Intersect.Editor/Forms/DockingElements/frmMapEditor.cs
+index 06f7798b..5044bccc 100644
+--- a/Intersect.Editor/Forms/DockingElements/frmMapEditor.cs
++++ b/Intersect.Editor/Forms/DockingElements/frmMapEditor.cs
+@@ -328,11 +328,11 @@ public void picMap_MouseDown(object sender, MouseEventArgs e)
+                     }
+                     else if (Globals.CurrentTool == (int) EditingTool.Fill)
+                     {
+-                        if (Globals.CurrentLayer == Options.LayerCount)
++                        if (Globals.CurrentLayer == MapLayers.Layers.Count)
+                         {
+                             Globals.MapEditorWindow.SmartFillAttributes(Globals.CurTileX, Globals.CurTileY);
+                         }
+-                        else if (Globals.CurrentLayer < Options.LayerCount)
++                        else if (Globals.CurrentLayer < MapLayers.Layers.Count)
+                         {
+                             Globals.MapEditorWindow.SmartFillLayer(Globals.CurTileX, Globals.CurTileY);
+                         }
+@@ -341,13 +341,13 @@ public void picMap_MouseDown(object sender, MouseEventArgs e)
+                     }
+                     else if (Globals.CurrentTool == (int) EditingTool.Erase)
+                     {
+-                        if (Globals.CurrentLayer <= Options.LayerCount)
++                        if (Globals.CurrentLayer <= MapLayers.Layers.Count)
+                         {
+-                            if (Globals.CurrentLayer == Options.LayerCount)
++                            if (Globals.CurrentLayer == MapLayers.Layers.Count)
+                             {
+                                 Globals.MapEditorWindow.SmartEraseAttributes(Globals.CurTileX, Globals.CurTileY);
+                             }
+-                            else if (Globals.CurrentLayer < Options.LayerCount)
++                            else if (Globals.CurrentLayer < MapLayers.Layers.Count)
+                             {
+                                 Globals.MapEditorWindow.SmartEraseLayer(Globals.CurTileX, Globals.CurTileY);
+                             }
+@@ -357,7 +357,7 @@ public void picMap_MouseDown(object sender, MouseEventArgs e)
+                     }
+                     else
+                     {
+-                        if (Globals.CurrentLayer == Options.LayerCount) //Attributes
++                        if (Globals.CurrentLayer == MapLayers.Layers.Count) //Attributes
+                         {
+                             Globals.MapLayersWindow.PlaceAttribute(
+                                 Globals.CurrentMap, Globals.CurTileX, Globals.CurTileY
+@@ -365,13 +365,13 @@ public void picMap_MouseDown(object sender, MouseEventArgs e)
+ 
+                             mMapChanged = true;
+                         }
+-                        else if (Globals.CurrentLayer == Options.LayerCount + 1) //Lights
++                        else if (Globals.CurrentLayer == MapLayers.Layers.Count + 1) //Lights
+                         {
+                         }
+-                        else if (Globals.CurrentLayer == Options.LayerCount + 2) //Events
++                        else if (Globals.CurrentLayer == MapLayers.Layers.Count + 2) //Events
+                         {
+                         }
+-                        else if (Globals.CurrentLayer == Options.LayerCount + 3) //NPCS
++                        else if (Globals.CurrentLayer == MapLayers.Layers.Count + 3) //NPCS
+                         {
+                         }
+                         else
+@@ -451,7 +451,7 @@ public void picMap_MouseDown(object sender, MouseEventArgs e)
+ 
+                     if (Globals.CurrentTool == (int) EditingTool.Fill)
+                     {
+-                        if (Globals.CurrentLayer <= Options.LayerCount)
++                        if (Globals.CurrentLayer <= MapLayers.Layers.Count)
+                         {
+                             Globals.MapEditorWindow.FillLayer();
+                         }
+@@ -460,14 +460,14 @@ public void picMap_MouseDown(object sender, MouseEventArgs e)
+                     }
+                     else if (Globals.CurrentTool == (int) EditingTool.Erase)
+                     {
+-                        if (Globals.CurrentLayer <= Options.LayerCount)
++                        if (Globals.CurrentLayer <= MapLayers.Layers.Count)
+                         {
+                             Globals.MapEditorWindow.EraseLayer();
+                         }
+ 
+                         Globals.MouseButton = -1;
+                     }
+-                    else if (Globals.CurrentLayer == Options.LayerCount) //Attributes
++                    else if (Globals.CurrentLayer == MapLayers.Layers.Count) //Attributes
+                     {
+                         if (Globals.CurrentTool == (int) EditingTool.Pen)
+                         {
+@@ -487,7 +487,7 @@ public void picMap_MouseDown(object sender, MouseEventArgs e)
+                             Globals.CurMapSelH = 0;
+                         }
+                     }
+-                    else if (Globals.CurrentLayer == Options.LayerCount + 1) //Lights
++                    else if (Globals.CurrentLayer == MapLayers.Layers.Count + 1) //Lights
+                     {
+                         LightBase tmpLight;
+                         if ((tmpLight = Globals.CurrentMap.FindLightAt(Globals.CurTileX, Globals.CurTileY)) != null)
+@@ -497,7 +497,7 @@ public void picMap_MouseDown(object sender, MouseEventArgs e)
+                             mMapChanged = true;
+                         }
+                     }
+-                    else if (Globals.CurrentLayer == Options.LayerCount + 2) //Events
++                    else if (Globals.CurrentLayer == MapLayers.Layers.Count + 2) //Events
+                     {
+                         EventBase tmpEvent;
+                         if ((tmpEvent = Globals.CurrentMap.FindEventAt(Globals.CurTileX, Globals.CurTileY)) != null)
+@@ -506,7 +506,7 @@ public void picMap_MouseDown(object sender, MouseEventArgs e)
+                             mMapChanged = true;
+                         }
+                     }
+-                    else if (Globals.CurrentLayer == Options.LayerCount + 3) //NPCS
++                    else if (Globals.CurrentLayer == MapLayers.Layers.Count + 3) //NPCS
+                     {
+                     }
+                     else
+@@ -670,17 +670,17 @@ private void picMap_MouseMove(object sender, MouseEventArgs e)
+                     }
+                     else
+                     {
+-                        if (Globals.CurrentLayer == Options.LayerCount)
++                        if (Globals.CurrentLayer == MapLayers.Layers.Count)
+                         {
+                             Globals.MapLayersWindow.PlaceAttribute(tmpMap, Globals.CurTileX, Globals.CurTileY);
+                         }
+-                        else if (Globals.CurrentLayer == Options.LayerCount + 1)
++                        else if (Globals.CurrentLayer == MapLayers.Layers.Count + 1)
+                         {
+                         }
+-                        else if (Globals.CurrentLayer == Options.LayerCount + 2)
++                        else if (Globals.CurrentLayer == MapLayers.Layers.Count + 2)
+                         {
+                         }
+-                        else if (Globals.CurrentLayer == Options.LayerCount + 3)
++                        else if (Globals.CurrentLayer == MapLayers.Layers.Count + 3)
+                         {
+                             if (Globals.MapLayersWindow.rbDeclared.Checked == true &&
+                                 Globals.MapLayersWindow.lstMapNpcs.Items.Count > 0)
+@@ -799,11 +799,11 @@ private void picMap_MouseMove(object sender, MouseEventArgs e)
+                     }
+                     else if (Globals.CurrentTool == (int) EditingTool.Pen)
+                     {
+-                        if (Globals.CurrentLayer == Options.LayerCount)
++                        if (Globals.CurrentLayer == MapLayers.Layers.Count)
+                         {
+                             Globals.MapLayersWindow.RemoveAttribute(tmpMap, Globals.CurTileX, Globals.CurTileY);
+                         }
+-                        else if (Globals.CurrentLayer < Options.LayerCount)
++                        else if (Globals.CurrentLayer < MapLayers.Layers.Count)
+                         {
+                             if (Globals.CurrentTool == (int) EditingTool.Pen)
+                             {
+@@ -894,7 +894,7 @@ public void picMap_MouseUp(object sender, MouseEventArgs e)
+                 Globals.CurMapSelW = selW;
+                 Globals.CurMapSelH = selH;
+ 
+-                if (Globals.CurrentLayer == Options.LayerCount) //Attributes
++                if (Globals.CurrentLayer == MapLayers.Layers.Count) //Attributes
+                 {
+                     for (var x = selX; x < selX + selW + 1; x++)
+                     {
+@@ -913,13 +913,13 @@ public void picMap_MouseUp(object sender, MouseEventArgs e)
+ 
+                     mMapChanged = true;
+                 }
+-                else if (Globals.CurrentLayer == Options.LayerCount + 1) //Lights
++                else if (Globals.CurrentLayer == MapLayers.Layers.Count + 1) //Lights
+                 {
+                 }
+-                else if (Globals.CurrentLayer == Options.LayerCount + 2) //Events
++                else if (Globals.CurrentLayer == MapLayers.Layers.Count + 2) //Events
+                 {
+                 }
+-                else if (Globals.CurrentLayer == Options.LayerCount + 3) //NPCS
++                else if (Globals.CurrentLayer == MapLayers.Layers.Count + 3) //NPCS
+                 {
+                 }
+                 else
+@@ -1209,94 +1209,78 @@ private void picMap_DoubleClick(object sender, EventArgs e)
+                 return;
+             }
+ 
+-            switch (Globals.CurrentLayer)
++            //Lights
++            if (Globals.CurrentLayer == MapLayers.Layers.Count + 1)
+             {
+-                //See if we should edit an event, light, npc, etc
+-                //Attributes
+-                case Options.LayerCount:
+-                    break;
+-
+-                //Lights
+-                case Options.LayerCount + 1:
++                LightBase tmpLight;
++                if ((tmpLight = Globals.CurrentMap.FindLightAt(Globals.CurTileX, Globals.CurTileY)) == null)
+                 {
+-                    LightBase tmpLight;
+-                    if ((tmpLight = Globals.CurrentMap.FindLightAt(Globals.CurTileX, Globals.CurTileY)) == null)
++                    tmpLight = new LightBase(Globals.CurTileX, Globals.CurTileY)
+                     {
+-                        tmpLight = new LightBase(Globals.CurTileX, Globals.CurTileY)
+-                        {
+-                            Size = 50
+-                        };
+-
+-                        Globals.CurrentMap.Lights.Add(tmpLight);
+-                    }
++                        Size = 50
++                    };
+ 
+-                    Globals.MapLayersWindow.btnLightsHeader_Click(null, null);
+-                    Globals.MapLayersWindow.lightEditor.Show();
+-                    Globals.BackupLight = new LightBase(tmpLight);
+-                    Globals.MapLayersWindow.lightEditor.LoadEditor(tmpLight);
+-                    Globals.EditingLight = tmpLight;
+-                    mMapChanged = true;
+-
+-                    break;
++                    Globals.CurrentMap.Lights.Add(tmpLight);
+                 }
+ 
+-                //Events
+-                case Options.LayerCount + 2:
+-                {
+-                    var tmpEvent = currentMap.FindEventAt(Globals.CurTileX, Globals.CurTileY);
+-                    FrmEvent tmpEventEditor;
+-                    if (tmpEvent == null)
+-                    {
+-                        tmpEvent = new EventBase(
+-                            Guid.NewGuid(), Globals.CurrentMap.Id, Globals.CurTileX, Globals.CurTileY
+-                        );
++                Globals.MapLayersWindow.btnLightsHeader_Click(null, null);
++                Globals.MapLayersWindow.lightEditor.Show();
++                Globals.BackupLight = new LightBase(tmpLight);
++                Globals.MapLayersWindow.lightEditor.LoadEditor(tmpLight);
++                Globals.EditingLight = tmpLight;
++                mMapChanged = true;
++            }
+ 
+-                        Globals.CurrentMap.LocalEvents.Add(tmpEvent.Id, tmpEvent);
+-                        tmpEventEditor = new FrmEvent(Globals.CurrentMap)
+-                        {
+-                            MyEvent = tmpEvent,
+-                            MyMap = Globals.CurrentMap,
+-                            NewEvent = true
+-                        };
++            // Events
++            if (Globals.CurrentLayer == MapLayers.Layers.Count + 2)
++            {
++                var tmpEvent = currentMap.FindEventAt(Globals.CurTileX, Globals.CurTileY);
++                FrmEvent tmpEventEditor;
++                if (tmpEvent == null)
++                {
++                    tmpEvent = new EventBase(
++                        Guid.NewGuid(), Globals.CurrentMap.Id, Globals.CurTileX, Globals.CurTileY
++                    );
+ 
+-                        tmpEventEditor.InitEditor(false, false, false);
+-                        tmpEventEditor.ShowDialog();
+-                        mMapChanged = true;
+-                    }
+-                    else
++                    Globals.CurrentMap.LocalEvents.Add(tmpEvent.Id, tmpEvent);
++                    tmpEventEditor = new FrmEvent(Globals.CurrentMap)
+                     {
+-                        tmpEventEditor = new FrmEvent(Globals.CurrentMap)
+-                            {MyEvent = tmpEvent, MyMap = Globals.CurrentMap};
++                        MyEvent = tmpEvent,
++                        MyMap = Globals.CurrentMap,
++                        NewEvent = true
++                    };
+ 
+-                        tmpEventEditor.InitEditor(false, false, false);
+-                        tmpEventEditor.ShowDialog();
+-                    }
+-
+-                    break;
++                    tmpEventEditor.InitEditor(false, false, false);
++                    tmpEventEditor.ShowDialog();
++                    mMapChanged = true;
+                 }
+-
+-                //NPCS
+-                case Options.LayerCount + 3:
++                else
+                 {
+-                    var spawnIndex = Globals.MapLayersWindow.lstMapNpcs.SelectedIndex;
+-                    var spawn = -1 < spawnIndex && spawnIndex < currentMap.Spawns.Count
+-                        ? currentMap.Spawns[spawnIndex]
+-                        : null;
++                    tmpEventEditor = new FrmEvent(Globals.CurrentMap)
++                    { MyEvent = tmpEvent, MyMap = Globals.CurrentMap };
+ 
+-                    if (spawn != null && Globals.MapLayersWindow.rbDeclared.Checked)
+-                    {
+-                        spawn.X = Globals.CurTileX;
+-                        spawn.Y = Globals.CurTileY;
+-                        mMapChanged = true;
+-                    }
+-
+-                    break;
++                    tmpEventEditor.InitEditor(false, false, false);
++                    tmpEventEditor.ShowDialog();
+                 }
++            }
+ 
+-                default:
+-                    break;
++            // NPCs
++            if (Globals.CurrentLayer == MapLayers.Layers.Count + 3)
++            {
++                var spawnIndex = Globals.MapLayersWindow.lstMapNpcs.SelectedIndex;
++                var spawn = -1 < spawnIndex && spawnIndex < currentMap.Spawns.Count
++                    ? currentMap.Spawns[spawnIndex]
++                    : null;
++
++                if (spawn != null && Globals.MapLayersWindow.rbDeclared.Checked)
++                {
++                    spawn.X = Globals.CurTileX;
++                    spawn.Y = Globals.CurTileY;
++                    mMapChanged = true;
++                }
+             }
+ 
++
+             Globals.Dragging = false;
+             Globals.TotalTileDragX = 0;
+             Globals.TotalTileDragY = 0;
+@@ -1354,13 +1338,13 @@ public void FillLayer()
+                         Globals.CurTileX = x;
+                         Globals.CurTileY = y;
+ 
+-                        if (Globals.CurrentLayer == Options.LayerCount)
++                        if (Globals.CurrentLayer == MapLayers.Layers.Count)
+                         {
+                             Globals.MapLayersWindow.PlaceAttribute(
+                                 Globals.CurrentMap, Globals.CurTileX, Globals.CurTileY
+                             );
+                         }
+-                        else if (Globals.CurrentLayer < Options.LayerCount)
++                        else if (Globals.CurrentLayer < MapLayers.Layers.Count)
+                         {
+                             if (Globals.Autotilemode == 0)
+                             {
+@@ -1455,13 +1439,13 @@ public void EraseLayer()
+                         Globals.CurTileX = x;
+                         Globals.CurTileY = y;
+ 
+-                        if (Globals.CurrentLayer == Options.LayerCount)
++                        if (Globals.CurrentLayer == MapLayers.Layers.Count)
+                         {
+                             Globals.MapLayersWindow.RemoveAttribute(
+                                 Globals.CurrentMap, Globals.CurTileX, Globals.CurTileY
+                             );
+                         }
+-                        else if (Globals.CurrentLayer < Options.LayerCount)
++                        else if (Globals.CurrentLayer < MapLayers.Layers.Count)
+                         {
+                             tmpMap.Layers[Globals.CurrentLayer].Tiles[Globals.CurTileX, Globals.CurTileY].TilesetId =
+                                 Guid.Empty;
+@@ -1817,14 +1801,14 @@ public void ProcessSelectionMovement(MapInstance tmpMap, bool ignoreMouse = fals
+                 }
+             }
+ 
+-            int z = 0, zf = Options.LayerCount;
++            int z = 0, zf = MapLayers.Layers.Count;
+             if (Globals.SelectionType == (int) SelectionTypes.CurrentLayer)
+             {
+                 z = Globals.CurrentLayer;
+                 zf = z + 1;
+-                if (zf > Options.LayerCount)
++                if (zf > MapLayers.Layers.Count)
+                 {
+-                    zf = Options.LayerCount;
++                    zf = MapLayers.Layers.Count;
+                 }
+             }
+ 
+@@ -1869,7 +1853,7 @@ public void ProcessSelectionMovement(MapInstance tmpMap, bool ignoreMouse = fals
+                     {
+                         //Attributes
+                         if (Globals.SelectionType != (int) SelectionTypes.CurrentLayer ||
+-                            Globals.CurrentLayer == Options.LayerCount)
++                            Globals.CurrentLayer == MapLayers.Layers.Count)
+                         {
+                             if (Globals.SelectionSource.Attributes[x0 - dragxoffset, y0 - dragyoffset] != null)
+                             {
+@@ -1886,7 +1870,7 @@ public void ProcessSelectionMovement(MapInstance tmpMap, bool ignoreMouse = fals
+                         //Spawns
+                         NpcSpawn spawnCopy;
+                         if (Globals.SelectionType != (int) SelectionTypes.CurrentLayer ||
+-                            Globals.CurrentLayer == Options.LayerCount + 3)
++                            Globals.CurrentLayer == MapLayers.Layers.Count + 3)
+                         {
+                             if (Globals.SelectionSource.FindSpawnAt(x0 - dragxoffset, y0 - dragyoffset) != null)
+                             {
+@@ -1910,7 +1894,7 @@ public void ProcessSelectionMovement(MapInstance tmpMap, bool ignoreMouse = fals
+                         //Lights
+                         LightBase lightCopy;
+                         if (Globals.SelectionType != (int) SelectionTypes.CurrentLayer ||
+-                            Globals.CurrentLayer == Options.LayerCount + 1)
++                            Globals.CurrentLayer == MapLayers.Layers.Count + 1)
+                         {
+                             if (Globals.SelectionSource.FindLightAt(x0 - dragxoffset, y0 - dragyoffset) != null)
+                             {
+@@ -1934,7 +1918,7 @@ public void ProcessSelectionMovement(MapInstance tmpMap, bool ignoreMouse = fals
+                         //Events
+                         EventBase eventCopy;
+                         if (Globals.SelectionType != (int) SelectionTypes.CurrentLayer ||
+-                            Globals.CurrentLayer == Options.LayerCount + 2)
++                            Globals.CurrentLayer == MapLayers.Layers.Count + 2)
+                         {
+                             if (Globals.SelectionSource.FindEventAt(x0 - dragxoffset, y0 - dragyoffset) != null)
+                             {
+@@ -1993,14 +1977,14 @@ private void WipeCurrentSelection(MapBase tmpMap)
+                 }
+             }
+ 
+-            int z = 0, zf = Options.LayerCount;
++            int z = 0, zf = MapLayers.Layers.Count;
+             if (Globals.SelectionType == (int) SelectionTypes.CurrentLayer)
+             {
+                 z = Globals.CurrentLayer;
+                 zf = z + 1;
+-                if (zf > Options.LayerCount)
++                if (zf > MapLayers.Layers.Count)
+                 {
+-                    zf = Options.LayerCount;
++                    zf = MapLayers.Layers.Count;
+                 }
+             }
+ 
+@@ -2044,7 +2028,7 @@ private void WipeCurrentSelection(MapBase tmpMap)
+                     {
+                         //Attributes
+                         if (Globals.SelectionType != (int) SelectionTypes.CurrentLayer ||
+-                            Globals.CurrentLayer == Options.LayerCount)
++                            Globals.CurrentLayer == MapLayers.Layers.Count)
+                         {
+                             if (tmpMap.Attributes[x0, y0] != null)
+                             {
+@@ -2054,7 +2038,7 @@ private void WipeCurrentSelection(MapBase tmpMap)
+ 
+                         //Spawns
+                         if (Globals.SelectionType != (int) SelectionTypes.CurrentLayer ||
+-                            Globals.CurrentLayer == Options.LayerCount + 3)
++                            Globals.CurrentLayer == MapLayers.Layers.Count + 3)
+                         {
+                             for (var w = 0; w < tmpMap.Spawns.Count; w++)
+                             {
+@@ -2067,7 +2051,7 @@ private void WipeCurrentSelection(MapBase tmpMap)
+ 
+                         //Lights
+                         if (Globals.SelectionType != (int) SelectionTypes.CurrentLayer ||
+-                            Globals.CurrentLayer == Options.LayerCount + 1)
++                            Globals.CurrentLayer == MapLayers.Layers.Count + 1)
+                         {
+                             for (var w = 0; w < tmpMap.Lights.Count; w++)
+                             {
+@@ -2080,7 +2064,7 @@ private void WipeCurrentSelection(MapBase tmpMap)
+ 
+                         //Events
+                         if (Globals.SelectionType != (int) SelectionTypes.CurrentLayer ||
+-                            Globals.CurrentLayer == Options.LayerCount + 2)
++                            Globals.CurrentLayer == MapLayers.Layers.Count + 2)
+                         {
+                             if (((MapInstance) tmpMap).FindEventAt(x0, y0) != null)
+                             {
+@@ -2143,7 +2127,7 @@ public void FlipVertical()
+                 {
+                     for (var y = 0; y <= selH; y++)
+                     {
+-                        for (var i = 0; i < Options.LayerCount; i++)
++                        for (var i = 0; i < MapLayers.Layers.Count; i++)
+                         {
+                             Globals.CurrentMap.Layers[i].Tiles[selX + x, selY + y] =
+                                 tmpMap.Layers[i].Tiles[selX + x, selY + selH - y];
+@@ -2219,7 +2203,7 @@ public void FlipHorizontal()
+                 {
+                     for (var y = 0; y <= selH; y++)
+                     {
+-                        for (var i = 0; i < Options.LayerCount; i++)
++                        for (var i = 0; i < MapLayers.Layers.Count; i++)
+                         {
+                             Globals.CurrentMap.Layers[i].Tiles[selX + x, selY + y] =
+                                 tmpMap.Layers[i].Tiles[selX + selW - x, selY + y];
+diff --git a/Intersect.Editor/Forms/DockingElements/frmMapLayers.Designer.cs b/Intersect.Editor/Forms/DockingElements/frmMapLayers.Designer.cs
+index 9f75ecc5..f4d4161d 100644
+--- a/Intersect.Editor/Forms/DockingElements/frmMapLayers.Designer.cs
++++ b/Intersect.Editor/Forms/DockingElements/frmMapLayers.Designer.cs
+@@ -108,11 +108,6 @@ private void InitializeComponent()
+             this.btnNpcsHeader = new DarkUI.Controls.DarkButton();
+             this.panel1 = new System.Windows.Forms.Panel();
+             this.pnlTiles = new System.Windows.Forms.Panel();
+-            this.picFringe2 = new System.Windows.Forms.PictureBox();
+-            this.picFringe = new System.Windows.Forms.PictureBox();
+-            this.picMask2 = new System.Windows.Forms.PictureBox();
+-            this.picMask = new System.Windows.Forms.PictureBox();
+-            this.picGround = new System.Windows.Forms.PictureBox();
+             this.pnlTilesetContainer = new Intersect.Editor.Forms.Controls.AutoDragPanel();
+             this.picTileset = new System.Windows.Forms.PictureBox();
+             this.pnlEvents = new System.Windows.Forms.Panel();
+@@ -120,6 +115,9 @@ private void InitializeComponent()
+             this.lightEditor = new Intersect.Editor.Forms.Controls.LightEditorCtrl();
+             this.pnlAttributes = new System.Windows.Forms.Panel();
+             this.pnlNpcs = new System.Windows.Forms.Panel();
++            this.cmbLayer = new DarkUI.Controls.DarkComboBox();
++            this.lblLayerVisible = new System.Windows.Forms.Label();
++            this.chkLayerVisible = new DarkUI.Controls.DarkCheckBox();
+             this.grpResource.SuspendLayout();
+             this.grpZResource.SuspendLayout();
+             this.grpItem.SuspendLayout();
+@@ -138,11 +136,6 @@ private void InitializeComponent()
+             this.grpSpawnLoc.SuspendLayout();
+             this.panel1.SuspendLayout();
+             this.pnlTiles.SuspendLayout();
+-            ((System.ComponentModel.ISupportInitialize)(this.picFringe2)).BeginInit();
+-            ((System.ComponentModel.ISupportInitialize)(this.picFringe)).BeginInit();
+-            ((System.ComponentModel.ISupportInitialize)(this.picMask2)).BeginInit();
+-            ((System.ComponentModel.ISupportInitialize)(this.picMask)).BeginInit();
+-            ((System.ComponentModel.ISupportInitialize)(this.picGround)).BeginInit();
+             this.pnlTilesetContainer.SuspendLayout();
+             ((System.ComponentModel.ISupportInitialize)(this.picTileset)).BeginInit();
+             this.pnlEvents.SuspendLayout();
+@@ -460,7 +453,11 @@ private void InitializeComponent()
+             this.nudItemQuantity.ValueChanged += new System.EventHandler(this.NudItemQuantity_ValueChanged);
+             this.nudItemQuantity.Size = new System.Drawing.Size(219, 20);
+             this.nudItemQuantity.TabIndex = 10;
+-            this.nudItemQuantity.Value = 1;
++            this.nudItemQuantity.Value = new decimal(new int[] {
++             1,
++             0,
++             0,
++             0});
+             
+             // 
+             // cmbItemAttribute
+@@ -1148,11 +1145,9 @@ private void InitializeComponent()
+             // 
+             // pnlTiles
+             // 
+-            this.pnlTiles.Controls.Add(this.picFringe2);
+-            this.pnlTiles.Controls.Add(this.picFringe);
+-            this.pnlTiles.Controls.Add(this.picMask2);
+-            this.pnlTiles.Controls.Add(this.picMask);
+-            this.pnlTiles.Controls.Add(this.picGround);
++            this.pnlTiles.Controls.Add(this.lblLayerVisible);
++            this.pnlTiles.Controls.Add(this.chkLayerVisible);
++            this.pnlTiles.Controls.Add(this.cmbLayer);
+             this.pnlTiles.Controls.Add(this.lblLayer);
+             this.pnlTiles.Controls.Add(this.cmbTilesets);
+             this.pnlTiles.Controls.Add(this.lblTileType);
+@@ -1165,56 +1160,6 @@ private void InitializeComponent()
+             this.pnlTiles.Size = new System.Drawing.Size(276, 422);
+             this.pnlTiles.TabIndex = 0;
+             // 
+-            // picFringe2
+-            // 
+-            this.picFringe2.Location = new System.Drawing.Point(232, 2);
+-            this.picFringe2.Name = "picFringe2";
+-            this.picFringe2.Size = new System.Drawing.Size(30, 32);
+-            this.picFringe2.TabIndex = 28;
+-            this.picFringe2.TabStop = false;
+-            this.picFringe2.MouseClick += new System.Windows.Forms.MouseEventHandler(this.picMapLayer_MouseClick);
+-            this.picFringe2.MouseHover += new System.EventHandler(this.picMapLayer_MouseHover);
+-            // 
+-            // picFringe
+-            // 
+-            this.picFringe.Location = new System.Drawing.Point(195, 2);
+-            this.picFringe.Name = "picFringe";
+-            this.picFringe.Size = new System.Drawing.Size(30, 32);
+-            this.picFringe.TabIndex = 27;
+-            this.picFringe.TabStop = false;
+-            this.picFringe.MouseClick += new System.Windows.Forms.MouseEventHandler(this.picMapLayer_MouseClick);
+-            this.picFringe.MouseHover += new System.EventHandler(this.picMapLayer_MouseHover);
+-            // 
+-            // picMask2
+-            // 
+-            this.picMask2.Location = new System.Drawing.Point(158, 2);
+-            this.picMask2.Name = "picMask2";
+-            this.picMask2.Size = new System.Drawing.Size(30, 32);
+-            this.picMask2.TabIndex = 26;
+-            this.picMask2.TabStop = false;
+-            this.picMask2.MouseClick += new System.Windows.Forms.MouseEventHandler(this.picMapLayer_MouseClick);
+-            this.picMask2.MouseHover += new System.EventHandler(this.picMapLayer_MouseHover);
+-            // 
+-            // picMask
+-            // 
+-            this.picMask.Location = new System.Drawing.Point(121, 2);
+-            this.picMask.Name = "picMask";
+-            this.picMask.Size = new System.Drawing.Size(30, 32);
+-            this.picMask.TabIndex = 25;
+-            this.picMask.TabStop = false;
+-            this.picMask.MouseClick += new System.Windows.Forms.MouseEventHandler(this.picMapLayer_MouseClick);
+-            this.picMask.MouseHover += new System.EventHandler(this.picMapLayer_MouseHover);
+-            // 
+-            // picGround
+-            // 
+-            this.picGround.Location = new System.Drawing.Point(84, 2);
+-            this.picGround.Name = "picGround";
+-            this.picGround.Size = new System.Drawing.Size(30, 32);
+-            this.picGround.TabIndex = 24;
+-            this.picGround.TabStop = false;
+-            this.picGround.MouseClick += new System.Windows.Forms.MouseEventHandler(this.picMapLayer_MouseClick);
+-            this.picGround.MouseHover += new System.EventHandler(this.picMapLayer_MouseHover);
+-            // 
+             // pnlTilesetContainer
+             // 
+             this.pnlTilesetContainer.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+@@ -1304,6 +1249,47 @@ private void InitializeComponent()
+             this.pnlNpcs.Size = new System.Drawing.Size(276, 422);
+             this.pnlNpcs.TabIndex = 1;
+             // 
++            // cmbLayer
++            // 
++            this.cmbLayer.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(69)))), ((int)(((byte)(73)))), ((int)(((byte)(74)))));
++            this.cmbLayer.BorderColor = System.Drawing.Color.FromArgb(((int)(((byte)(90)))), ((int)(((byte)(90)))), ((int)(((byte)(90)))));
++            this.cmbLayer.BorderStyle = System.Windows.Forms.ButtonBorderStyle.Solid;
++            this.cmbLayer.ButtonColor = System.Drawing.Color.FromArgb(((int)(((byte)(43)))), ((int)(((byte)(43)))), ((int)(((byte)(43)))));
++            this.cmbLayer.ButtonIcon = ((System.Drawing.Bitmap)(resources.GetObject("cmbLayer.ButtonIcon")));
++            this.cmbLayer.DrawDropdownHoverOutline = false;
++            this.cmbLayer.DrawFocusRectangle = false;
++            this.cmbLayer.DrawMode = System.Windows.Forms.DrawMode.OwnerDrawFixed;
++            this.cmbLayer.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
++            this.cmbLayer.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
++            this.cmbLayer.ForeColor = System.Drawing.Color.Gainsboro;
++            this.cmbLayer.FormattingEnabled = true;
++            this.cmbLayer.Location = new System.Drawing.Point(84, 8);
++            this.cmbLayer.Name = "cmbLayer";
++            this.cmbLayer.Size = new System.Drawing.Size(122, 21);
++            this.cmbLayer.TabIndex = 24;
++            this.cmbLayer.Text = null;
++            this.cmbLayer.TextPadding = new System.Windows.Forms.Padding(2);
++            this.cmbLayer.SelectedIndexChanged += new System.EventHandler(this.cmbLayer_SelectedIndexChanged);
++            // 
++            // lblLayerVisible
++            // 
++            this.lblLayerVisible.AutoSize = true;
++            this.lblLayerVisible.ForeColor = System.Drawing.Color.White;
++            this.lblLayerVisible.Location = new System.Drawing.Point(229, 12);
++            this.lblLayerVisible.Name = "lblLayerVisible";
++            this.lblLayerVisible.Size = new System.Drawing.Size(37, 13);
++            this.lblLayerVisible.TabIndex = 70;
++            this.lblLayerVisible.Text = "Visible";
++            // 
++            // chkLayerVisible
++            // 
++            this.chkLayerVisible.AutoSize = true;
++            this.chkLayerVisible.Location = new System.Drawing.Point(212, 11);
++            this.chkLayerVisible.Name = "chkLayerVisible";
++            this.chkLayerVisible.Size = new System.Drawing.Size(15, 14);
++            this.chkLayerVisible.TabIndex = 69;
++            this.chkLayerVisible.CheckedChanged += new System.EventHandler(this.chkLayerVisible_CheckedChanged);
++            // 
+             // FrmMapLayers
+             // 
+             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
+@@ -1358,11 +1344,6 @@ private void InitializeComponent()
+             this.panel1.ResumeLayout(false);
+             this.pnlTiles.ResumeLayout(false);
+             this.pnlTiles.PerformLayout();
+-            ((System.ComponentModel.ISupportInitialize)(this.picFringe2)).EndInit();
+-            ((System.ComponentModel.ISupportInitialize)(this.picFringe)).EndInit();
+-            ((System.ComponentModel.ISupportInitialize)(this.picMask2)).EndInit();
+-            ((System.ComponentModel.ISupportInitialize)(this.picMask)).EndInit();
+-            ((System.ComponentModel.ISupportInitialize)(this.picGround)).EndInit();
+             this.pnlTilesetContainer.ResumeLayout(false);
+             ((System.ComponentModel.ISupportInitialize)(this.picTileset)).EndInit();
+             this.pnlEvents.ResumeLayout(false);
+@@ -1454,14 +1435,12 @@ private void InitializeComponent()
+         private System.Windows.Forms.Panel pnlNpcs;
+         private System.Windows.Forms.Panel pnlAttributes;
+         private System.Windows.Forms.Panel pnlTiles;
+-        private PictureBox picFringe2;
+-        private PictureBox picFringe;
+-        private PictureBox picMask2;
+-        private PictureBox picMask;
+-        private PictureBox picGround;
+         private DarkNumericUpDown nudWarpY;
+         private DarkNumericUpDown nudWarpX;
+         private DarkNumericUpDown nudItemQuantity;
+         private DarkNumericUpDown nudSoundDistance;
++        public DarkComboBox cmbLayer;
++        private Label lblLayerVisible;
++        private DarkCheckBox chkLayerVisible;
+     }
+ }
+\ No newline at end of file
+diff --git a/Intersect.Editor/Forms/DockingElements/frmMapLayers.cs b/Intersect.Editor/Forms/DockingElements/frmMapLayers.cs
+index 864e139d..75b4e5a5 100644
+--- a/Intersect.Editor/Forms/DockingElements/frmMapLayers.cs
++++ b/Intersect.Editor/Forms/DockingElements/frmMapLayers.cs
+@@ -52,19 +52,28 @@ public partial class FrmMapLayers : DockContent
+ 
+         private bool mTMouseDown;
+ 
++        private bool ignoreCheckChanged;
++
+         public FrmMapLayers()
+         {
+             InitializeComponent();
+-            mMapLayers.Add(picGround);
+-            LayerVisibility.Add(true);
+-            mMapLayers.Add(picMask);
+-            LayerVisibility.Add(true);
+-            mMapLayers.Add(picMask2);
+-            LayerVisibility.Add(true);
+-            mMapLayers.Add(picFringe);
+-            LayerVisibility.Add(true);
+-            mMapLayers.Add(picFringe2);
+-            LayerVisibility.Add(true);
++
++            for (var x = 0; x < MapLayers.Layers.Count; x++)
++            {
++                if (Strings.Tiles.layers.ContainsKey(x))
++                    cmbLayer.Items.Add(Strings.Tiles.layers[x]);
++                else
++                    cmbLayer.Items.Add("Unknown");
++
++                LayerVisibility.Add(true);
++            }
++
++            if (cmbLayer.Items.Count > 0)
++            {
++                cmbLayer.SelectedIndex = 0;
++                LayerChanged();
++            }
++
+         }
+ 
+         public void Init()
+@@ -304,7 +313,7 @@ public void SetTileset(string name)
+         public void SetLayer(int index)
+         {
+             Globals.CurrentLayer = index;
+-            if (index < Options.LayerCount)
++            if (index < MapLayers.Layers.Count)
+             {
+                 for (var i = 0; i < mMapLayers.Count; i++)
+                 {
+@@ -993,7 +1002,7 @@ private void btnAttributeHeader_Click(object sender, EventArgs e)
+         {
+             Globals.CurrentTool = Globals.SavedTool;
+             ChangeTab();
+-            Globals.CurrentLayer = Options.LayerCount;
++            Globals.CurrentLayer = MapLayers.Layers.Count;
+             Core.Graphics.TilePreviewUpdated = true;
+             btnAttributeHeader.BackColor = System.Drawing.Color.FromArgb(90, 90, 90);
+             CurrentTab = LayerTabs.Attributes;
+@@ -1002,13 +1011,13 @@ private void btnAttributeHeader_Click(object sender, EventArgs e)
+ 
+         public void btnLightsHeader_Click(object sender, EventArgs e)
+         {
+-            if (Globals.CurrentLayer < Options.LayerCount + 1)
++            if (Globals.CurrentLayer < MapLayers.Layers.Count + 1)
+             {
+                 Globals.SavedTool = Globals.CurrentTool;
+             }
+ 
+             ChangeTab();
+-            Globals.CurrentLayer = Options.LayerCount + 1;
++            Globals.CurrentLayer = MapLayers.Layers.Count + 1;
+             Core.Graphics.TilePreviewUpdated = true;
+             btnLightsHeader.BackColor = System.Drawing.Color.FromArgb(90, 90, 90);
+             CurrentTab = LayerTabs.Lights;
+@@ -1017,13 +1026,13 @@ public void btnLightsHeader_Click(object sender, EventArgs e)
+ 
+         private void btnEventsHeader_Click(object sender, EventArgs e)
+         {
+-            if (Globals.CurrentLayer < Options.LayerCount + 1)
++            if (Globals.CurrentLayer < MapLayers.Layers.Count + 1)
+             {
+                 Globals.SavedTool = Globals.CurrentTool;
+             }
+ 
+             ChangeTab();
+-            Globals.CurrentLayer = Options.LayerCount + 2;
++            Globals.CurrentLayer = MapLayers.Layers.Count + 2;
+             Core.Graphics.TilePreviewUpdated = true;
+             btnEventsHeader.BackColor = System.Drawing.Color.FromArgb(90, 90, 90);
+             CurrentTab = LayerTabs.Events;
+@@ -1032,13 +1041,13 @@ private void btnEventsHeader_Click(object sender, EventArgs e)
+ 
+         private void btnNpcsHeader_Click(object sender, EventArgs e)
+         {
+-            if (Globals.CurrentLayer < Options.LayerCount + 1)
++            if (Globals.CurrentLayer < MapLayers.Layers.Count + 1)
+             {
+                 Globals.SavedTool = Globals.CurrentTool;
+             }
+ 
+             ChangeTab();
+-            Globals.CurrentLayer = Options.LayerCount + 3;
++            Globals.CurrentLayer = MapLayers.Layers.Count + 3;
+             Core.Graphics.TilePreviewUpdated = true;
+             RefreshNpcList();
+             btnNpcsHeader.BackColor = System.Drawing.Color.FromArgb(90, 90, 90);
+@@ -1083,6 +1092,38 @@ private void NudItemQuantity_ValueChanged(object sender, System.EventArgs e)
+             nudItemQuantity.Value = Math.Max(1, nudItemQuantity.Value);
+         }
+ 
++        private void cmbLayer_SelectedIndexChanged(object sender, EventArgs e)
++        {
++            LayerChanged();
++        }
++
++        private void LayerChanged()
++        {
++            if (cmbLayer.SelectedIndex >= 0 && cmbLayer.SelectedIndex<MapLayers.Layers.Count)
++            {
++                SetLayer(cmbLayer.SelectedIndex);
++
++                if (chkLayerVisible.Checked != LayerVisibility[cmbLayer.SelectedIndex])
++                    ignoreCheckChanged = true;
++
++                chkLayerVisible.Checked = LayerVisibility[cmbLayer.SelectedIndex];
++            }
++        }
++
++        private void chkLayerVisible_CheckedChanged(object sender, EventArgs e)
++        {
++
++            if (ignoreCheckChanged)
++            {
++                ignoreCheckChanged = false;
++                return;
++            }
++
++            if (cmbLayer.SelectedIndex >= 0 && cmbLayer.SelectedIndex<MapLayers.Layers.Count)
++                ToggleLayerVisibility(cmbLayer.SelectedIndex);
++
++        }
++
+     }
+ 
+ }
+diff --git a/Intersect.Editor/Forms/DockingElements/frmMapLayers.resx b/Intersect.Editor/Forms/DockingElements/frmMapLayers.resx
+index 6436f3d4..e7887b8c 100644
+--- a/Intersect.Editor/Forms/DockingElements/frmMapLayers.resx
++++ b/Intersect.Editor/Forms/DockingElements/frmMapLayers.resx
+@@ -193,6 +193,13 @@
+         iVBORw0KGgoAAAANSUhEUgAAAAkAAAAFCAYAAACXU8ZrAAAAIGNIUk0AAHolAACAgwAA+f8AAIDpAAB1
+         MAAA6mAAADqYAAAXb5JfxUYAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAvSURBVBhXY4iJiflPCDP8//8f
+         r0KQPFgRLoUwObgiEMamAIRRFIEwuoL///8zAAC5cW+geGnZqAAAAABJRU5ErkJggg==
++</value>
++  </data>
++  <data name="cmbLayer.ButtonIcon" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
++    <value>
++        iVBORw0KGgoAAAANSUhEUgAAAAkAAAAFCAYAAACXU8ZrAAAAIGNIUk0AAHolAACAgwAA+f8AAIDpAAB1
++        MAAA6mAAADqYAAAXb5JfxUYAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAvSURBVBhXY4iJiflPCDP8//8f
++        r0KQPFgRLoUwObgiEMamAIRRFIEwuoL///8zAAC5cW+geGnZqAAAAABJRU5ErkJggg==
+ </value>
+   </data>
+ </root>
+\ No newline at end of file
+diff --git a/Intersect.Editor/Forms/frmMain.cs b/Intersect.Editor/Forms/frmMain.cs
+index 23a6e847..c1f57586 100644
+--- a/Intersect.Editor/Forms/frmMain.cs
++++ b/Intersect.Editor/Forms/frmMain.cs
+@@ -22,6 +22,7 @@
+ using Intersect.Editor.Networking;
+ using Intersect.Enums;
+ using Intersect.GameObjects;
++using Intersect.GameObjects.Maps;
+ using Intersect.Network;
+ using Intersect.Updater;
+ 
+@@ -501,7 +502,7 @@ public void Update()
+             }
+ 
+             //Process the Fill/Erase Buttons
+-            if (Globals.CurrentLayer <= Options.LayerCount)
++            if (Globals.CurrentLayer <= MapLayers.Layers.Count)
+             {
+                 toolStripBtnFill.Enabled = true;
+                 fillToolStripMenuItem.Enabled = true;
+@@ -521,20 +522,20 @@ public void Update()
+             toolStripBtnSelect.Enabled = true;
+             toolStripBtnRect.Enabled = false;
+             toolStripBtnEyeDrop.Enabled = false;
+-            if (Globals.CurrentLayer == Options.LayerCount) //Attributes
++            if (Globals.CurrentLayer == MapLayers.Layers.Count) //Attributes
+             {
+                 toolStripBtnPen.Enabled = true;
+                 toolStripBtnRect.Enabled = true;
+             }
+-            else if (Globals.CurrentLayer == Options.LayerCount + 1) //Lights
++            else if (Globals.CurrentLayer == MapLayers.Layers.Count + 1) //Lights
+             {
+                 Globals.CurrentTool = (int) EditingTool.Selection;
+             }
+-            else if (Globals.CurrentLayer == Options.LayerCount + 2) //Events
++            else if (Globals.CurrentLayer == MapLayers.Layers.Count + 2) //Events
+             {
+                 Globals.CurrentTool = (int) EditingTool.Selection;
+             }
+-            else if (Globals.CurrentLayer == Options.LayerCount + 3) //NPCS
++            else if (Globals.CurrentLayer == MapLayers.Layers.Count + 3) //NPCS
+             {
+                 Globals.CurrentTool = (int) EditingTool.Selection;
+             }
+@@ -1039,7 +1040,7 @@ private void exitToolStripMenuItem_Click(object sender, EventArgs e)
+         //Edit
+         private void fillToolStripMenuItem_Click(object sender, EventArgs e)
+         {
+-            if (Globals.CurrentLayer <= Options.LayerCount)
++            if (Globals.CurrentLayer <= MapLayers.Layers.Count)
+             {
+                 Globals.MapEditorWindow.FillLayer();
+             }
+@@ -1047,7 +1048,7 @@ private void fillToolStripMenuItem_Click(object sender, EventArgs e)
+ 
+         private void eraseLayerToolStripMenuItem_Click(object sender, EventArgs e)
+         {
+-            if (Globals.CurrentLayer <= Options.LayerCount)
++            if (Globals.CurrentLayer <= MapLayers.Layers.Count)
+             {
+                 Globals.MapEditorWindow.EraseLayer();
+             }
+diff --git a/Intersect.Editor/Localization/Strings.cs b/Intersect.Editor/Localization/Strings.cs
+index b65d3a77..8f0ec33c 100644
+--- a/Intersect.Editor/Localization/Strings.cs
++++ b/Intersect.Editor/Localization/Strings.cs
+@@ -4305,7 +4305,7 @@ public struct Tiles
+                 {1, @"Mask"},
+                 {2, @"Mask 2"},
+                 {3, @"Fringe"},
+-                {4, @"Fringe 2"},
++                {4, @"Fringe 2"}
+             };
+ 
+             public static LocalizedString normal = @"Normal";
+diff --git a/Intersect.Server/Database/DbInterface.cs b/Intersect.Server/Database/DbInterface.cs
+index 3c871ee9..5507999e 100644
+--- a/Intersect.Server/Database/DbInterface.cs
++++ b/Intersect.Server/Database/DbInterface.cs
+@@ -10,7 +10,7 @@
+ using System.Text;
+ using System.Threading;
+ using System.Threading.Tasks;
+-
++using System.Windows.Forms;
+ using Intersect.Collections;
+ using Intersect.Config;
+ using Intersect.Enums;
+@@ -24,6 +24,7 @@
+ using Intersect.Models;
+ using Intersect.Server.Core;
+ using Intersect.Server.Database.GameData;
++using Intersect.Server.Database.GameData.Migrations;
+ using Intersect.Server.Database.Logging;
+ using Intersect.Server.Database.PlayerData;
+ using Intersect.Server.Database.PlayerData.Players;
+@@ -1134,20 +1135,123 @@ public static void DeleteGameObject(IDatabaseObject gameObject)
+         //Post Loading Functions
+         private static void OnMapsLoaded()
+         {
++            bool layersChanged = false;
++            bool layersUpdated = false;
++            bool errorOccured = false;
++            bool noMaps = false;
++
+             if (MapBase.Lookup.Count == 0)
+             {
+                 Console.WriteLine(Strings.Database.nomaps);
+                 AddGameObject(GameObjectType.Map);
++                noMaps = true;
+             }
+ 
+             GenerateMapGrids();
+             LoadMapFolders();
+             CheckAllMapConnections();
+ 
+-            foreach (var map in MapInstance.Lookup)
++            if (MapLayers.isValid())
+             {
+-                ((MapInstance) map.Value).Initialize();
++
++                if (!noMaps)
++                    layersChanged = MapLayer.LayersHaveChanged();
++
++                if (layersChanged)
++                {
++                    Console.WriteLine();
++                    Console.WriteLine("Layer definitions have been changed. Map layers will be adjusted for all maps. This process may take a few minutes.");
++                    Console.WriteLine("Are you sure you wish to continue? Type 'y' to continue");
++
++                    var input = Console.ReadLine();
++
++                    if (input != "y")
++                        Environment.Exit(0);
++
++                    Console.WriteLine("Did you create a backup? Type 'y' to continue");
++
++                    var input2 = Console.ReadLine();
++
++                    if (input2 != "y")
++                        Environment.Exit(0);
++
++                    Console.WriteLine();
++                    Console.WriteLine("Starting to update map layers... please wait");
++                }
++
++                foreach (var map in MapInstance.Lookup)
++                {
++                    ((MapInstance)map.Value).Initialize();
++
++                    if (layersChanged && !errorOccured)
++                    {
++                        byte[] tileData = (byte[])((MapInstance)map.Value).TileData.Clone();
++
++                        if (MapLayer.AdjustLayers(ref tileData))
++                        {
++                            ((MapInstance)map.Value).tmpTileData = tileData;
++                            layersUpdated = true;
++                        }
++                        else
++                        {
++                            errorOccured = true;
++                            Console.WriteLine(Strings.Database.invalidLayers);
++                            Environment.Exit(0);
++                            break;
++                        }
++                    }
++
++                }
++
++                if (layersChanged && !errorOccured)
++                {
++
++                    if (layersUpdated)
++                    {
++                        try
++                        {
++                            foreach (var map in MapInstance.Lookup)
++                            {
++                                ((MapInstance)map.Value).ApplyLayerChange();
++                            }
++                        }
++                        catch (Exception ex)
++                        {
++                            Log.Error("Error applying layer changes. " + ex.Message);
++                            Environment.Exit(0);
++                        }
++                    }
++
++                    if (!MapLayer.UpdateDBLayers())
++                        Environment.Exit(0);
++                }
++
++                if (layersChanged)
++                {
++                    if (layersUpdated)
++                    {
++                        try
++                        {
++                            foreach (var map in MapInstance.Lookup)
++                            {
++                                ((MapInstance)map.Value).ClearLayerChangeData();
++                            }
++                        }
++                        catch (Exception ex)
++                        {
++                            Log.Error("Error clearing layer change data. " + ex.Message);
++                        }
++                    }
++                    Console.WriteLine("Finished updating map layers.");
++                }
++
+             }
++            else
++            {
++                Console.WriteLine(Strings.Database.invalidLayers);
++                Environment.Exit(0);
++            }
++
+         }
+ 
+         private static void OnClassesLoaded()
+diff --git a/Intersect.Server/Database/GameData/GameContext.cs b/Intersect.Server/Database/GameData/GameContext.cs
+index 1afe0048..47653997 100644
+--- a/Intersect.Server/Database/GameData/GameContext.cs
++++ b/Intersect.Server/Database/GameData/GameContext.cs
+@@ -7,6 +7,7 @@
+ using Intersect.GameObjects;
+ using Intersect.GameObjects.Crafting;
+ using Intersect.GameObjects.Events;
++using Intersect.GameObjects.Maps;
+ using Intersect.GameObjects.Maps.MapList;
+ using Intersect.Server.Database.GameData.Migrations;
+ using Intersect.Server.Maps;
+@@ -66,6 +67,8 @@ public GameContext() : base(DefaultConnectionStringBuilder)
+ 
+         public DbSet<MapList> MapFolders { get; set; }
+ 
++        public DbSet<MapLayerBase> MapLayers { get; set; }
++
+         //NPCs
+         public DbSet<NpcBase> Npcs { get; set; }
+ 
+diff --git a/Intersect.Server/Database/GameData/Migrations/Beta6Migration.cs b/Intersect.Server/Database/GameData/Migrations/Beta6Migration.cs
+index 6bdb7f01..75262473 100644
+--- a/Intersect.Server/Database/GameData/Migrations/Beta6Migration.cs
++++ b/Intersect.Server/Database/GameData/Migrations/Beta6Migration.cs
+@@ -668,8 +668,8 @@ private static byte[] ReencodeTileData(byte[] tileData)
+         {
+             var data = Decompress(tileData);
+             var readPos = 0;
+-            var Layers = new TileArray[Options.LayerCount];
+-            for (var i = 0; i < Options.LayerCount; i++)
++            var Layers = new TileArray[MapLayers.Layers.Count];
++            for (var i = 0; i < MapLayers.Layers.Count; i++)
+             {
+                 Layers[i].Tiles = new Tile[Options.MapWidth, Options.MapHeight];
+                 for (var x = 0; x < Options.MapWidth; x++)
+diff --git a/Intersect.Server/Intersect.Server.csproj b/Intersect.Server/Intersect.Server.csproj
+index 1bbee3dc..fb42f0d4 100644
+--- a/Intersect.Server/Intersect.Server.csproj
++++ b/Intersect.Server/Intersect.Server.csproj
+@@ -472,6 +472,7 @@
+     <Compile Include="Maps\MapInstance.cs" />
+     <Compile Include="Maps\MapItemInstance.cs" />
+     <Compile Include="Maps\MapItemSpawn.cs" />
++    <Compile Include="Maps\MapLayers.cs" />
+     <Compile Include="Maps\MapNpcSpawn.cs" />
+     <Compile Include="Maps\MapResourceSpawn.cs" />
+     <Compile Include="Maps\MapTrapInstance.cs" />
+@@ -641,6 +642,10 @@
+     <Compile Include="Migrations\Game\20191030214236_Spell_Upgrades_Traps_Item_Upgrades_Effects_Event_Upgrades_Labels.cs" />
+     <Compile Include="Migrations\Game\20191030214236_Spell_Upgrades_Traps_Item_Upgrades_Effects_Event_Upgrades_Labels.designer.cs">
+       <DependentUpon>20191030214236_Spell_Upgrades_Traps_Item_Upgrades_Effects_Event_Upgrades_Labels.cs</DependentUpon>
++    </Compile>
++	<Compile Include="Migrations\Game\20200605015121_AdditionalMapLayers.cs" />
++    <Compile Include="Migrations\Game\20200605015121_AdditionalMapLayers.designer.cs">
++      <DependentUpon>20200605015121_AdditionalMapLayers.cs</DependentUpon>
+     </Compile>
+     <Compile Include="Migrations\PlayerContextModelSnapshot.cs" />
+     <Compile Include="Web\RestApi\Attributes\DebugAuthorizeAttribute.cs" />
+diff --git a/Intersect.Server/Localization/Strings.cs b/Intersect.Server/Localization/Strings.cs
+index 59c91510..f13b3213 100644
+--- a/Intersect.Server/Localization/Strings.cs
++++ b/Intersect.Server/Localization/Strings.cs
+@@ -533,6 +533,9 @@ public sealed class DatabaseNamespace : LocaleNamespace
+             [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+             public readonly LocalizedString usingsqlite = @"Using SQLite Database for account and data storage.";
+ 
++            [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
++            public readonly LocalizedString invalidLayers = @"Unable to initialize maps. Layers not formatted correctly.";
++
+         }
+ 
+         public sealed class ErrorsNamespace : LocaleNamespace
+diff --git a/Intersect.Server/Maps/MapInstance.cs b/Intersect.Server/Maps/MapInstance.cs
+index 5c3cdec5..6dce2c62 100644
+--- a/Intersect.Server/Maps/MapInstance.cs
++++ b/Intersect.Server/Maps/MapInstance.cs
+@@ -5,6 +5,7 @@
+ using System.ComponentModel.DataAnnotations.Schema;
+ using System.Diagnostics;
+ using System.Linq;
++using System.Runtime.CompilerServices;
+ using System.Threading;
+ 
+ using Intersect.Enums;
+@@ -74,6 +75,8 @@ public class MapInstance : MapBase
+ 
+         [JsonIgnore] [NotMapped] public long UpdateDelay = 75;
+ 
++        [JsonIgnore] [NotMapped] public byte[] tmpTileData { get; set; }
++
+         //EF
+         public MapInstance() : base()
+         {
+@@ -1172,6 +1175,16 @@ public override void Delete()
+             Lookup?.Delete(this);
+         }
+ 
++        public void ApplyLayerChange()
++        {
++            TileData = (byte[])tmpTileData.Clone();
++        }
++
++        public void ClearLayerChangeData()
++        {
++            tmpTileData = null;
++        }
++
+     }
+ 
+ }
+diff --git a/Intersect.Server/Maps/MapLayers.cs b/Intersect.Server/Maps/MapLayers.cs
+new file mode 100644
+index 00000000..f5a4ce7f
+--- /dev/null
++++ b/Intersect.Server/Maps/MapLayers.cs
+@@ -0,0 +1,167 @@
++﻿using Intersect.GameObjects.Maps;
++using Intersect.Logging;
++using Intersect.Network;
++using Intersect.Server.Database;
++using Intersect.Server.Database.GameData;
++using System;
++using System.Collections.Generic;
++using System.Linq;
++using System.Text;
++using System.Threading.Tasks;
++using System.Web.Handlers;
++
++namespace Intersect.Server.Maps
++{
++    public static class MapLayer
++    {
++
++        public static bool LayersHaveChanged()
++        {
++            bool changed = false;
++
++            lock (GameContext.Current)
++            {
++                try
++                {
++                    var dbLayers = GameContext.Current.MapLayers.OrderBy(l => l.ID).ToList();
++
++                    if (dbLayers.Count != MapLayers.Layers.Count())
++                        changed = true;
++
++                    if (!changed)
++                    {
++                        for (int x = 0; x < MapLayers.Layers.Count; x++)
++                        {
++
++                            var curLayer = MapLayers.Layers[x];
++
++                            if (dbLayers[x].MapLayerRegionID != (int)curLayer.Region)
++                            {
++                                changed = true;
++                                break;
++                            }
++
++                            if (dbLayers[x].IntersectLayerID != (int)curLayer.IntersectLayer)
++                            {
++                                changed = true;
++                                break;
++                            }
++
++                        }
++                    }
++                } catch (Exception ex)
++                {
++                    Log.Error("Error determining if layers have changed definition. " + ex.Message);
++                    changed = false;
++                }
++
++            }
++
++            return changed;
++        }
++
++        public static bool AdjustLayers(ref byte[] LayerData)
++        {
++            TileArray[] NewLayers = new TileArray[MapLayers.Layers.Count];
++
++            try
++            {
++                Ceras mCeras = new Ceras(false);
++                TileArray[] OldLayers = mCeras.Decompress<TileArray[]>(LayerData);
++
++                for (int x = 0; x < MapLayers.Layers.Count; x++)
++                {
++
++                    if (MapLayers.Layers[x].OldLayerID != -1)
++                    {
++                        if (OldLayers.Count() >= MapLayers.Layers[x].OldLayerID)
++                            NewLayers[x] = OldLayers[MapLayers.Layers[x].OldLayerID];
++                        else
++                            return false;
++                    }
++                    else
++                    {
++                        NewLayers[x] = new TileArray();
++
++                        NewLayers[x].Tiles = new Tile[Options.MapWidth, Options.MapHeight];
++                        for (var z = 0; z < Options.MapWidth; z++)
++                        {
++                            for (var y = 0; y < Options.MapHeight; y++)
++                            {
++                                NewLayers[x].Tiles[z, y] = new Tile();
++                            }
++                        }
++                    }
++
++                }
++
++                LayerData = mCeras.Compress(NewLayers);
++            }
++            catch (Exception ex)
++            {
++                Log.Error("Error adjusting layer changes. " + ex.Message);
++                return false;
++            }
++
++            return true;
++        }
++
++        public static bool UpdateDBLayers()
++        {
++            bool blnSuccess = true;
++            MapLayerBase tmpLayer;
++
++            lock (GameContext.Current)
++            {
++
++                try
++                {
++
++                    for (int x = 0; x < MapLayers.Layers.Count; x++)
++                    {
++
++                        var layer = GameContext.Current.MapLayers.Where(l => l.ID == x).FirstOrDefault();
++
++                        if (layer != null)
++                            tmpLayer = layer;
++                        else
++                        {
++                            tmpLayer = new MapLayerBase();
++
++                            tmpLayer.ID = x;
++                        }
++
++                        tmpLayer.MapLayerRegionID = (int)MapLayers.Layers[x].Region;
++                        tmpLayer.IntersectLayerID = (int)MapLayers.Layers[x].IntersectLayer;
++                        tmpLayer.OldLayerID = MapLayers.Layers[x].OldLayerID;
++
++                        if (layer != null)
++                            GameContext.Current.MapLayers.Update(tmpLayer);
++                        else
++                            GameContext.Current.MapLayers.Add(tmpLayer);
++
++                    }
++
++                    // Check for more layers in db than current list
++                    var layers = GameContext.Current.MapLayers.Where(l => l.ID >= MapLayers.Layers.Count);
++
++                    if (layers != null)
++                    {
++                        GameContext.Current.MapLayers.RemoveRange(layers);
++                    }
++
++                    blnSuccess = true;
++                } 
++                catch (Exception ex)
++                {
++                    Log.Error("Error updating map layer changes in database. " + ex.Message);
++                    blnSuccess = false;
++                }
++
++            }
++
++            return blnSuccess;
++        }
++
++    }
++}
+diff --git a/Intersect.Server/Migrations/Game/20200605015121_AdditionalMapLayers.Designer.cs b/Intersect.Server/Migrations/Game/20200605015121_AdditionalMapLayers.Designer.cs
+new file mode 100644
+index 00000000..7d33b899
+--- /dev/null
++++ b/Intersect.Server/Migrations/Game/20200605015121_AdditionalMapLayers.Designer.cs
+@@ -0,0 +1,1052 @@
++﻿// <auto-generated />
++using System;
++using Intersect.Server.Database.GameData;
++using Microsoft.EntityFrameworkCore;
++using Microsoft.EntityFrameworkCore.Infrastructure;
++using Microsoft.EntityFrameworkCore.Migrations;
++using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
++
++namespace Intersect.Server.Migrations.Game
++{
++    [DbContext(typeof(GameContext))]
++    [Migration("20200605015121_AdditionalMapLayers")]
++    partial class AdditionalMapLayers
++    {
++        protected override void BuildTargetModel(ModelBuilder modelBuilder)
++        {
++#pragma warning disable 612, 618
++            modelBuilder
++                .HasAnnotation("ProductVersion", "2.1.3-rtm-32065");
++
++            modelBuilder.Entity("Intersect.GameObjects.AnimationBase", b =>
++                {
++                    b.Property<Guid>("Id")
++                        .ValueGeneratedOnAdd();
++
++                    b.Property<bool>("CompleteSound");
++
++                    b.Property<string>("Folder");
++
++                    b.Property<string>("Name");
++
++                    b.Property<string>("Sound");
++
++                    b.Property<long>("TimeCreated");
++
++                    b.HasKey("Id");
++
++                    b.ToTable("Animations");
++                });
++
++            modelBuilder.Entity("Intersect.GameObjects.ClassBase", b =>
++                {
++                    b.Property<Guid>("Id")
++                        .ValueGeneratedOnAdd();
++
++                    b.Property<Guid>("AttackAnimationId")
++                        .HasColumnName("AttackAnimation");
++
++                    b.Property<int>("AttackSpeedModifier");
++
++                    b.Property<int>("AttackSpeedValue");
++
++                    b.Property<long>("BaseExp");
++
++                    b.Property<int>("BasePoints");
++
++                    b.Property<int>("CritChance");
++
++                    b.Property<double>("CritMultiplier");
++
++                    b.Property<int>("Damage");
++
++                    b.Property<int>("DamageType");
++
++                    b.Property<long>("ExpIncrease");
++
++                    b.Property<string>("ExpOverridesJson")
++                        .HasColumnName("ExperienceOverrides");
++
++                    b.Property<string>("Folder");
++
++                    b.Property<bool>("IncreasePercentage");
++
++                    b.Property<string>("JsonBaseStats")
++                        .HasColumnName("BaseStats");
++
++                    b.Property<string>("JsonBaseVitals")
++                        .HasColumnName("BaseVitals");
++
++                    b.Property<string>("JsonItems")
++                        .HasColumnName("Items");
++
++                    b.Property<string>("JsonSpells")
++                        .HasColumnName("Spells");
++
++                    b.Property<string>("JsonSprites")
++                        .HasColumnName("Sprites");
++
++                    b.Property<bool>("Locked");
++
++                    b.Property<string>("Name");
++
++                    b.Property<int>("PointIncrease");
++
++                    b.Property<string>("RegenJson")
++                        .HasColumnName("VitalRegen");
++
++                    b.Property<int>("Scaling");
++
++                    b.Property<int>("ScalingStat");
++
++                    b.Property<int>("SpawnDir");
++
++                    b.Property<Guid>("SpawnMapId")
++                        .HasColumnName("SpawnMap");
++
++                    b.Property<int>("SpawnX");
++
++                    b.Property<int>("SpawnY");
++
++                    b.Property<string>("StatIncreaseJson")
++                        .HasColumnName("StatIncreases");
++
++                    b.Property<long>("TimeCreated");
++
++                    b.Property<string>("VitalIncreaseJson")
++                        .HasColumnName("VitalIncreases");
++
++                    b.HasKey("Id");
++
++                    b.ToTable("Classes");
++                });
++
++            modelBuilder.Entity("Intersect.GameObjects.Crafting.CraftBase", b =>
++                {
++                    b.Property<Guid>("Id")
++                        .ValueGeneratedOnAdd();
++
++                    b.Property<string>("Folder");
++
++                    b.Property<string>("IngredientsJson")
++                        .HasColumnName("Ingredients");
++
++                    b.Property<Guid>("ItemId");
++
++                    b.Property<string>("Name");
++
++                    b.Property<int>("Quantity");
++
++                    b.Property<int>("Time");
++
++                    b.Property<long>("TimeCreated");
++
++                    b.HasKey("Id");
++
++                    b.ToTable("Crafts");
++                });
++
++            modelBuilder.Entity("Intersect.GameObjects.CraftingTableBase", b =>
++                {
++                    b.Property<Guid>("Id")
++                        .ValueGeneratedOnAdd();
++
++                    b.Property<string>("CraftsJson")
++                        .HasColumnName("Crafts");
++
++                    b.Property<string>("Folder");
++
++                    b.Property<string>("Name");
++
++                    b.Property<long>("TimeCreated");
++
++                    b.HasKey("Id");
++
++                    b.ToTable("CraftingTables");
++                });
++
++            modelBuilder.Entity("Intersect.GameObjects.Events.EventBase", b =>
++                {
++                    b.Property<Guid>("Id")
++                        .ValueGeneratedOnAdd();
++
++                    b.Property<bool>("CommonEvent");
++
++                    b.Property<string>("Folder");
++
++                    b.Property<bool>("Global");
++
++                    b.Property<Guid>("MapId");
++
++                    b.Property<string>("Name");
++
++                    b.Property<string>("PagesJson")
++                        .HasColumnName("Pages");
++
++                    b.Property<int>("SpawnX");
++
++                    b.Property<int>("SpawnY");
++
++                    b.Property<long>("TimeCreated");
++
++                    b.HasKey("Id");
++
++                    b.ToTable("Events");
++                });
++
++            modelBuilder.Entity("Intersect.GameObjects.ItemBase", b =>
++                {
++                    b.Property<Guid>("Id")
++                        .ValueGeneratedOnAdd();
++
++                    b.Property<Guid>("AnimationId")
++                        .HasColumnName("Animation");
++
++                    b.Property<Guid>("AttackAnimationId")
++                        .HasColumnName("AttackAnimation");
++
++                    b.Property<int>("AttackSpeedModifier");
++
++                    b.Property<int>("AttackSpeedValue");
++
++                    b.Property<bool>("Bound");
++
++                    b.Property<int>("Cooldown");
++
++                    b.Property<int>("CritChance");
++
++                    b.Property<double>("CritMultiplier");
++
++                    b.Property<int>("Damage");
++
++                    b.Property<int>("DamageType");
++
++                    b.Property<string>("Description");
++
++                    b.Property<bool>("DestroySpell");
++
++                    b.Property<Guid>("EquipmentAnimationId")
++                        .HasColumnName("EquipmentAnimation");
++
++                    b.Property<int>("EquipmentSlot");
++
++                    b.Property<Guid>("EventId")
++                        .HasColumnName("Event");
++
++                    b.Property<string>("FemalePaperdoll");
++
++                    b.Property<string>("Folder");
++
++                    b.Property<string>("Icon");
++
++                    b.Property<int>("ItemType");
++
++                    b.Property<string>("JsonUsageRequirements")
++                        .HasColumnName("UsageRequirements");
++
++                    b.Property<string>("MalePaperdoll");
++
++                    b.Property<string>("Name");
++
++                    b.Property<string>("PercentageStatsJson")
++                        .HasColumnName("PercentageStatsGiven");
++
++                    b.Property<string>("PercentageVitalsJson")
++                        .HasColumnName("PercentageVitalsGiven");
++
++                    b.Property<int>("Price");
++
++                    b.Property<Guid>("ProjectileId")
++                        .HasColumnName("Projectile");
++
++                    b.Property<bool>("QuickCast");
++
++                    b.Property<int>("Rarity");
++
++                    b.Property<int>("Scaling");
++
++                    b.Property<int>("ScalingStat");
++
++                    b.Property<int>("SlotCount");
++
++                    b.Property<int>("Speed");
++
++                    b.Property<Guid>("SpellId")
++                        .HasColumnName("Spell");
++
++                    b.Property<bool>("Stackable");
++
++                    b.Property<int>("StatGrowth");
++
++                    b.Property<string>("StatsJson")
++                        .HasColumnName("StatsGiven");
++
++                    b.Property<long>("TimeCreated");
++
++                    b.Property<int>("Tool");
++
++                    b.Property<bool>("TwoHanded");
++
++                    b.Property<string>("VitalsJson")
++                        .HasColumnName("VitalsGiven");
++
++                    b.Property<string>("VitalsRegenJson")
++                        .HasColumnName("VitalsRegen");
++
++                    b.HasKey("Id");
++
++                    b.ToTable("Items");
++                });
++
++            modelBuilder.Entity("Intersect.GameObjects.Maps.MapLayerBase", b =>
++                {
++                    b.Property<int>("ID")
++                        .ValueGeneratedOnAdd();
++
++                    b.Property<int>("IntersectLayerID");
++
++                    b.Property<int>("MapLayerRegionID");
++
++                    b.Property<int>("OldLayerID");
++
++                    b.HasKey("ID");
++
++                    b.ToTable("MapLayers");
++                });
++
++            modelBuilder.Entity("Intersect.GameObjects.Maps.MapList.MapList", b =>
++                {
++                    b.Property<Guid>("Id")
++                        .ValueGeneratedOnAdd();
++
++                    b.Property<string>("JsonData")
++                        .HasColumnName("JsonData");
++
++                    b.HasKey("Id");
++
++                    b.ToTable("MapFolders");
++                });
++
++            modelBuilder.Entity("Intersect.GameObjects.NpcBase", b =>
++                {
++                    b.Property<Guid>("Id")
++                        .ValueGeneratedOnAdd();
++
++                    b.Property<bool>("Aggressive");
++
++                    b.Property<bool>("AttackAllies");
++
++                    b.Property<Guid>("AttackAnimationId")
++                        .HasColumnName("AttackAnimation");
++
++                    b.Property<string>("AttackOnSightConditionsJson")
++                        .HasColumnName("AttackOnSightConditions");
++
++                    b.Property<int>("AttackSpeedModifier");
++
++                    b.Property<int>("AttackSpeedValue");
++
++                    b.Property<string>("CraftsJson")
++                        .HasColumnName("Spells");
++
++                    b.Property<int>("CritChance");
++
++                    b.Property<double>("CritMultiplier");
++
++                    b.Property<int>("Damage");
++
++                    b.Property<int>("DamageType");
++
++                    b.Property<long>("Experience");
++
++                    b.Property<byte>("FleeHealthPercentage");
++
++                    b.Property<bool>("FocusHighestDamageDealer");
++
++                    b.Property<string>("Folder");
++
++                    b.Property<string>("JsonAggroList")
++                        .HasColumnName("AggroList");
++
++                    b.Property<string>("JsonDrops")
++                        .HasColumnName("Drops");
++
++                    b.Property<string>("JsonMaxVital")
++                        .HasColumnName("MaxVital");
++
++                    b.Property<string>("JsonStat")
++                        .HasColumnName("Stats");
++
++                    b.Property<int>("Level");
++
++                    b.Property<byte>("Movement");
++
++                    b.Property<string>("Name");
++
++                    b.Property<bool>("NpcVsNpcEnabled");
++
++                    b.Property<Guid>("OnDeathEventId")
++                        .HasColumnName("OnDeathEvent");
++
++                    b.Property<Guid>("OnDeathPartyEventId")
++                        .HasColumnName("OnDeathPartyEvent");
++
++                    b.Property<string>("PlayerCanAttackConditionsJson")
++                        .HasColumnName("PlayerCanAttackConditions");
++
++                    b.Property<string>("PlayerFriendConditionsJson")
++                        .HasColumnName("PlayerFriendConditions");
++
++                    b.Property<string>("RegenJson")
++                        .HasColumnName("VitalRegen");
++
++                    b.Property<int>("Scaling");
++
++                    b.Property<int>("ScalingStat");
++
++                    b.Property<int>("SightRange");
++
++                    b.Property<int>("SpawnDuration");
++
++                    b.Property<int>("SpellFrequency");
++
++                    b.Property<string>("Sprite");
++
++                    b.Property<bool>("Swarm");
++
++                    b.Property<long>("TimeCreated");
++
++                    b.HasKey("Id");
++
++                    b.ToTable("Npcs");
++                });
++
++            modelBuilder.Entity("Intersect.GameObjects.PlayerVariableBase", b =>
++                {
++                    b.Property<Guid>("Id")
++                        .ValueGeneratedOnAdd();
++
++                    b.Property<string>("Folder");
++
++                    b.Property<string>("Name");
++
++                    b.Property<string>("TextId");
++
++                    b.Property<long>("TimeCreated");
++
++                    b.Property<byte>("Type");
++
++                    b.HasKey("Id");
++
++                    b.ToTable("PlayerVariables");
++                });
++
++            modelBuilder.Entity("Intersect.GameObjects.ProjectileBase", b =>
++                {
++                    b.Property<Guid>("Id")
++                        .ValueGeneratedOnAdd();
++
++                    b.Property<Guid>("AmmoItemId")
++                        .HasColumnName("Ammo");
++
++                    b.Property<int>("AmmoRequired");
++
++                    b.Property<string>("AnimationsJson")
++                        .HasColumnName("Animations");
++
++                    b.Property<int>("Delay");
++
++                    b.Property<string>("Folder");
++
++                    b.Property<bool>("GrappleHook");
++
++                    b.Property<bool>("IgnoreActiveResources");
++
++                    b.Property<bool>("IgnoreExhaustedResources");
++
++                    b.Property<bool>("IgnoreMapBlocks");
++
++                    b.Property<bool>("IgnoreZDimension");
++
++                    b.Property<int>("Knockback");
++
++                    b.Property<string>("Name");
++
++                    b.Property<bool>("PierceTarget");
++
++                    b.Property<int>("Quantity");
++
++                    b.Property<int>("Range");
++
++                    b.Property<string>("SpawnsJson")
++                        .HasColumnName("SpawnLocations");
++
++                    b.Property<int>("Speed");
++
++                    b.Property<Guid>("SpellId")
++                        .HasColumnName("Spell");
++
++                    b.Property<long>("TimeCreated");
++
++                    b.HasKey("Id");
++
++                    b.ToTable("Projectiles");
++                });
++
++            modelBuilder.Entity("Intersect.GameObjects.QuestBase", b =>
++                {
++                    b.Property<Guid>("Id")
++                        .ValueGeneratedOnAdd();
++
++                    b.Property<string>("BeforeDescription");
++
++                    b.Property<string>("EndDescription");
++
++                    b.Property<Guid>("EndEventId")
++                        .HasColumnName("EndEvent");
++
++                    b.Property<string>("Folder");
++
++                    b.Property<string>("InProgressDescription");
++
++                    b.Property<string>("JsonRequirements")
++                        .HasColumnName("Requirements");
++
++                    b.Property<bool>("LogAfterComplete");
++
++                    b.Property<bool>("LogBeforeOffer");
++
++                    b.Property<string>("Name");
++
++                    b.Property<bool>("Quitable");
++
++                    b.Property<bool>("Repeatable");
++
++                    b.Property<string>("StartDescription");
++
++                    b.Property<Guid>("StartEventId")
++                        .HasColumnName("StartEvent");
++
++                    b.Property<string>("TasksJson")
++                        .HasColumnName("Tasks");
++
++                    b.Property<long>("TimeCreated");
++
++                    b.HasKey("Id");
++
++                    b.ToTable("Quests");
++                });
++
++            modelBuilder.Entity("Intersect.GameObjects.ResourceBase", b =>
++                {
++                    b.Property<Guid>("Id")
++                        .ValueGeneratedOnAdd();
++
++                    b.Property<Guid>("AnimationId")
++                        .HasColumnName("Animation");
++
++                    b.Property<Guid>("EventId")
++                        .HasColumnName("Event");
++
++                    b.Property<string>("Folder");
++
++                    b.Property<string>("JsonDrops")
++                        .HasColumnName("Drops");
++
++                    b.Property<string>("JsonHarvestingRequirements")
++                        .HasColumnName("HarvestingRequirements");
++
++                    b.Property<int>("MaxHp");
++
++                    b.Property<int>("MinHp");
++
++                    b.Property<string>("Name");
++
++                    b.Property<int>("SpawnDuration");
++
++                    b.Property<long>("TimeCreated");
++
++                    b.Property<int>("Tool");
++
++                    b.Property<int>("VitalRegen");
++
++                    b.Property<bool>("WalkableAfter");
++
++                    b.Property<bool>("WalkableBefore");
++
++                    b.HasKey("Id");
++
++                    b.ToTable("Resources");
++                });
++
++            modelBuilder.Entity("Intersect.GameObjects.ServerVariableBase", b =>
++                {
++                    b.Property<Guid>("Id")
++                        .ValueGeneratedOnAdd();
++
++                    b.Property<string>("Folder");
++
++                    b.Property<string>("Json")
++                        .HasColumnName("Value");
++
++                    b.Property<string>("Name");
++
++                    b.Property<string>("TextId");
++
++                    b.Property<long>("TimeCreated");
++
++                    b.Property<byte>("Type");
++
++                    b.HasKey("Id");
++
++                    b.ToTable("ServerVariables");
++                });
++
++            modelBuilder.Entity("Intersect.GameObjects.ShopBase", b =>
++                {
++                    b.Property<Guid>("Id")
++                        .ValueGeneratedOnAdd();
++
++                    b.Property<bool>("BuyingWhitelist");
++
++                    b.Property<Guid>("DefaultCurrencyId")
++                        .HasColumnName("DefaultCurrency");
++
++                    b.Property<string>("Folder");
++
++                    b.Property<string>("JsonBuyingItems")
++                        .HasColumnName("BuyingItems");
++
++                    b.Property<string>("JsonSellingItems")
++                        .HasColumnName("SellingItems");
++
++                    b.Property<string>("Name");
++
++                    b.Property<long>("TimeCreated");
++
++                    b.HasKey("Id");
++
++                    b.ToTable("Shops");
++                });
++
++            modelBuilder.Entity("Intersect.GameObjects.SpellBase", b =>
++                {
++                    b.Property<Guid>("Id")
++                        .ValueGeneratedOnAdd();
++
++                    b.Property<bool>("Bound");
++
++                    b.Property<Guid>("CastAnimationId")
++                        .HasColumnName("CastAnimation");
++
++                    b.Property<int>("CastDuration");
++
++                    b.Property<int>("CooldownDuration");
++
++                    b.Property<string>("Description");
++
++                    b.Property<Guid>("EventId")
++                        .HasColumnName("Event");
++
++                    b.Property<string>("Folder");
++
++                    b.Property<Guid>("HitAnimationId")
++                        .HasColumnName("HitAnimation");
++
++                    b.Property<string>("Icon");
++
++                    b.Property<string>("JsonCastRequirements")
++                        .HasColumnName("CastRequirements");
++
++                    b.Property<string>("Name");
++
++                    b.Property<int>("SpellType");
++
++                    b.Property<long>("TimeCreated");
++
++                    b.Property<string>("VitalCostJson")
++                        .HasColumnName("VitalCost");
++
++                    b.HasKey("Id");
++
++                    b.ToTable("Spells");
++                });
++
++            modelBuilder.Entity("Intersect.GameObjects.TilesetBase", b =>
++                {
++                    b.Property<Guid>("Id")
++                        .ValueGeneratedOnAdd();
++
++                    b.Property<string>("Name");
++
++                    b.Property<long>("TimeCreated");
++
++                    b.HasKey("Id");
++
++                    b.ToTable("Tilesets");
++                });
++
++            modelBuilder.Entity("Intersect.GameObjects.TimeBase", b =>
++                {
++                    b.Property<Guid>("Id")
++                        .ValueGeneratedOnAdd();
++
++                    b.Property<string>("DaylightHuesJson")
++                        .HasColumnName("DaylightHues");
++
++                    b.Property<int>("RangeInterval");
++
++                    b.Property<float>("Rate");
++
++                    b.Property<bool>("SyncTime");
++
++                    b.HasKey("Id");
++
++                    b.ToTable("Time");
++                });
++
++            modelBuilder.Entity("Intersect.Server.Maps.MapInstance", b =>
++                {
++                    b.Property<Guid>("Id")
++                        .ValueGeneratedOnAdd();
++
++                    b.Property<int>("AHue");
++
++                    b.Property<byte[]>("AttributeData")
++                        .HasColumnName("Attributes");
++
++                    b.Property<int>("BHue");
++
++                    b.Property<int>("Brightness");
++
++                    b.Property<Guid>("Down");
++
++                    b.Property<string>("EventIdsJson")
++                        .HasColumnName("Events");
++
++                    b.Property<string>("Fog");
++
++                    b.Property<int>("FogTransparency");
++
++                    b.Property<int>("FogXSpeed");
++
++                    b.Property<int>("FogYSpeed");
++
++                    b.Property<int>("GHue");
++
++                    b.Property<bool>("IsIndoors");
++
++                    b.Property<Guid>("Left");
++
++                    b.Property<string>("LightsJson")
++                        .HasColumnName("Lights");
++
++                    b.Property<string>("Music");
++
++                    b.Property<string>("Name");
++
++                    b.Property<string>("NpcSpawnsJson")
++                        .HasColumnName("NpcSpawns");
++
++                    b.Property<string>("OverlayGraphic");
++
++                    b.Property<string>("Panorama");
++
++                    b.Property<string>("PlayerLightColorJson")
++                        .HasColumnName("PlayerLightColor");
++
++                    b.Property<float>("PlayerLightExpand");
++
++                    b.Property<byte>("PlayerLightIntensity");
++
++                    b.Property<int>("PlayerLightSize");
++
++                    b.Property<int>("RHue");
++
++                    b.Property<int>("Revision");
++
++                    b.Property<Guid>("Right");
++
++                    b.Property<string>("Sound");
++
++                    b.Property<byte[]>("TileData");
++
++                    b.Property<long>("TimeCreated");
++
++                    b.Property<Guid>("Up");
++
++                    b.Property<Guid>("WeatherAnimationId")
++                        .HasColumnName("WeatherAnimation");
++
++                    b.Property<int>("WeatherIntensity");
++
++                    b.Property<int>("WeatherXSpeed");
++
++                    b.Property<int>("WeatherYSpeed");
++
++                    b.Property<int>("ZoneType");
++
++                    b.HasKey("Id");
++
++                    b.ToTable("Maps");
++                });
++
++            modelBuilder.Entity("Intersect.GameObjects.AnimationBase", b =>
++                {
++                    b.OwnsOne("Intersect.GameObjects.AnimationLayer", "Lower", b1 =>
++                        {
++                            b1.Property<Guid>("AnimationBaseId");
++
++                            b1.Property<bool>("AlternateRenderLayer");
++
++                            b1.Property<bool>("DisableRotations");
++
++                            b1.Property<int>("FrameCount");
++
++                            b1.Property<int>("FrameSpeed");
++
++                            b1.Property<string>("Light");
++
++                            b1.Property<int>("LoopCount");
++
++                            b1.Property<string>("Sprite");
++
++                            b1.Property<int>("XFrames");
++
++                            b1.Property<int>("YFrames");
++
++                            b1.ToTable("Animations");
++
++                            b1.HasOne("Intersect.GameObjects.AnimationBase")
++                                .WithOne("Lower")
++                                .HasForeignKey("Intersect.GameObjects.AnimationLayer", "AnimationBaseId")
++                                .OnDelete(DeleteBehavior.Cascade);
++                        });
++
++                    b.OwnsOne("Intersect.GameObjects.AnimationLayer", "Upper", b1 =>
++                        {
++                            b1.Property<Guid>("AnimationBaseId");
++
++                            b1.Property<bool>("AlternateRenderLayer");
++
++                            b1.Property<bool>("DisableRotations");
++
++                            b1.Property<int>("FrameCount");
++
++                            b1.Property<int>("FrameSpeed");
++
++                            b1.Property<string>("Light");
++
++                            b1.Property<int>("LoopCount");
++
++                            b1.Property<string>("Sprite");
++
++                            b1.Property<int>("XFrames");
++
++                            b1.Property<int>("YFrames");
++
++                            b1.ToTable("Animations");
++
++                            b1.HasOne("Intersect.GameObjects.AnimationBase")
++                                .WithOne("Upper")
++                                .HasForeignKey("Intersect.GameObjects.AnimationLayer", "AnimationBaseId")
++                                .OnDelete(DeleteBehavior.Cascade);
++                        });
++                });
++
++            modelBuilder.Entity("Intersect.GameObjects.ItemBase", b =>
++                {
++                    b.OwnsOne("Intersect.GameObjects.ConsumableData", "Consumable", b1 =>
++                        {
++                            b1.Property<Guid>("ItemBaseId");
++
++                            b1.Property<int>("Percentage");
++
++                            b1.Property<byte>("Type");
++
++                            b1.Property<int>("Value");
++
++                            b1.ToTable("Items");
++
++                            b1.HasOne("Intersect.GameObjects.ItemBase")
++                                .WithOne("Consumable")
++                                .HasForeignKey("Intersect.GameObjects.ConsumableData", "ItemBaseId")
++                                .OnDelete(DeleteBehavior.Cascade);
++                        });
++
++                    b.OwnsOne("Intersect.GameObjects.EffectData", "Effect", b1 =>
++                        {
++                            b1.Property<Guid>("ItemBaseId");
++
++                            b1.Property<int>("Percentage");
++
++                            b1.Property<byte>("Type");
++
++                            b1.ToTable("Items");
++
++                            b1.HasOne("Intersect.GameObjects.ItemBase")
++                                .WithOne("Effect")
++                                .HasForeignKey("Intersect.GameObjects.EffectData", "ItemBaseId")
++                                .OnDelete(DeleteBehavior.Cascade);
++                        });
++                });
++
++            modelBuilder.Entity("Intersect.GameObjects.ResourceBase", b =>
++                {
++                    b.OwnsOne("Intersect.GameObjects.ResourceState", "Exhausted", b1 =>
++                        {
++                            b1.Property<Guid>("ResourceBaseId");
++
++                            b1.Property<string>("Graphic");
++
++                            b1.Property<bool>("GraphicFromTileset");
++
++                            b1.Property<int>("Height");
++
++                            b1.Property<bool>("RenderBelowEntities");
++
++                            b1.Property<int>("Width");
++
++                            b1.Property<int>("X");
++
++                            b1.Property<int>("Y");
++
++                            b1.ToTable("Resources");
++
++                            b1.HasOne("Intersect.GameObjects.ResourceBase")
++                                .WithOne("Exhausted")
++                                .HasForeignKey("Intersect.GameObjects.ResourceState", "ResourceBaseId")
++                                .OnDelete(DeleteBehavior.Cascade);
++                        });
++
++                    b.OwnsOne("Intersect.GameObjects.ResourceState", "Initial", b1 =>
++                        {
++                            b1.Property<Guid>("ResourceBaseId");
++
++                            b1.Property<string>("Graphic");
++
++                            b1.Property<bool>("GraphicFromTileset");
++
++                            b1.Property<int>("Height");
++
++                            b1.Property<bool>("RenderBelowEntities");
++
++                            b1.Property<int>("Width");
++
++                            b1.Property<int>("X");
++
++                            b1.Property<int>("Y");
++
++                            b1.ToTable("Resources");
++
++                            b1.HasOne("Intersect.GameObjects.ResourceBase")
++                                .WithOne("Initial")
++                                .HasForeignKey("Intersect.GameObjects.ResourceState", "ResourceBaseId")
++                                .OnDelete(DeleteBehavior.Cascade);
++                        });
++                });
++
++            modelBuilder.Entity("Intersect.GameObjects.SpellBase", b =>
++                {
++                    b.OwnsOne("Intersect.GameObjects.SpellCombatData", "Combat", b1 =>
++                        {
++                            b1.Property<Guid>("SpellBaseId");
++
++                            b1.Property<int>("CastRange");
++
++                            b1.Property<int>("CritChance");
++
++                            b1.Property<double>("CritMultiplier");
++
++                            b1.Property<int>("DamageType");
++
++                            b1.Property<int>("Duration");
++
++                            b1.Property<int>("Effect");
++
++                            b1.Property<bool>("Friendly");
++
++                            b1.Property<int>("HitRadius");
++
++                            b1.Property<bool>("HoTDoT");
++
++                            b1.Property<int>("HotDotInterval");
++
++                            b1.Property<int>("OnHitDuration")
++                                .HasColumnName("OnHit");
++
++                            b1.Property<string>("PercentageStatDiffJson")
++                                .HasColumnName("PercentageStatDiff");
++
++                            b1.Property<Guid>("ProjectileId")
++                                .HasColumnName("Projectile");
++
++                            b1.Property<int>("Scaling");
++
++                            b1.Property<int>("ScalingStat");
++
++                            b1.Property<string>("StatDiffJson")
++                                .HasColumnName("StatDiff");
++
++                            b1.Property<int>("TargetType");
++
++                            b1.Property<string>("TransformSprite");
++
++                            b1.Property<int>("TrapDuration")
++                                .HasColumnName("Trap");
++
++                            b1.Property<string>("VitalDiffJson")
++                                .HasColumnName("VitalDiff");
++
++                            b1.ToTable("Spells");
++
++                            b1.HasOne("Intersect.GameObjects.SpellBase")
++                                .WithOne("Combat")
++                                .HasForeignKey("Intersect.GameObjects.SpellCombatData", "SpellBaseId")
++                                .OnDelete(DeleteBehavior.Cascade);
++                        });
++
++                    b.OwnsOne("Intersect.GameObjects.SpellDashOpts", "Dash", b1 =>
++                        {
++                            b1.Property<Guid>("SpellBaseId");
++
++                            b1.Property<bool>("IgnoreActiveResources");
++
++                            b1.Property<bool>("IgnoreInactiveResources");
++
++                            b1.Property<bool>("IgnoreMapBlocks");
++
++                            b1.Property<bool>("IgnoreZDimensionAttributes");
++
++                            b1.ToTable("Spells");
++
++                            b1.HasOne("Intersect.GameObjects.SpellBase")
++                                .WithOne("Dash")
++                                .HasForeignKey("Intersect.GameObjects.SpellDashOpts", "SpellBaseId")
++                                .OnDelete(DeleteBehavior.Cascade);
++                        });
++
++                    b.OwnsOne("Intersect.GameObjects.SpellWarpData", "Warp", b1 =>
++                        {
++                            b1.Property<Guid>("SpellBaseId");
++
++                            b1.Property<int>("Dir");
++
++                            b1.Property<Guid>("MapId");
++
++                            b1.Property<int>("X");
++
++                            b1.Property<int>("Y");
++
++                            b1.ToTable("Spells");
++
++                            b1.HasOne("Intersect.GameObjects.SpellBase")
++                                .WithOne("Warp")
++                                .HasForeignKey("Intersect.GameObjects.SpellWarpData", "SpellBaseId")
++                                .OnDelete(DeleteBehavior.Cascade);
++                        });
++                });
++#pragma warning restore 612, 618
++        }
++    }
++}
+diff --git a/Intersect.Server/Migrations/Game/20200605015121_AdditionalMapLayers.cs b/Intersect.Server/Migrations/Game/20200605015121_AdditionalMapLayers.cs
+new file mode 100644
+index 00000000..ee86d8df
+--- /dev/null
++++ b/Intersect.Server/Migrations/Game/20200605015121_AdditionalMapLayers.cs
+@@ -0,0 +1,37 @@
++﻿using Microsoft.EntityFrameworkCore.Migrations;
++
++namespace Intersect.Server.Migrations.Game
++{
++    public partial class AdditionalMapLayers : Migration
++    {
++        protected override void Up(MigrationBuilder migrationBuilder)
++        {
++            migrationBuilder.CreateTable(
++                name: "MapLayers",
++                columns: table => new
++                {
++                    ID = table.Column<int>(nullable: false)
++                        .Annotation("Sqlite:Autoincrement", true),
++                    MapLayerRegionID = table.Column<int>(nullable: false),
++                    IntersectLayerID = table.Column<int>(nullable: false),
++                    OldLayerID = table.Column<int>(nullable: false)
++                },
++                constraints: table =>
++                {
++                    table.PrimaryKey("PK_MapLayers", x => x.ID);
++                });
++
++            migrationBuilder.Sql("INSERT INTO MapLayers (ID, MapLayerRegionID, IntersectLayerID, OldLayerID) VALUES (0, 0, 0, -1)");
++            migrationBuilder.Sql("INSERT INTO MapLayers (ID, MapLayerRegionID, IntersectLayerID, OldLayerID) VALUES (1, 0, 1, -1)");
++            migrationBuilder.Sql("INSERT INTO MapLayers (ID, MapLayerRegionID, IntersectLayerID, OldLayerID) VALUES (2, 0, 2, -1)");
++            migrationBuilder.Sql("INSERT INTO MapLayers (ID, MapLayerRegionID, IntersectLayerID, OldLayerID) VALUES (3, 1, 3, -1)");
++            migrationBuilder.Sql("INSERT INTO MapLayers (ID, MapLayerRegionID, IntersectLayerID, OldLayerID) VALUES (4, 2, 4, -1)");
++        }
++
++        protected override void Down(MigrationBuilder migrationBuilder)
++        {
++            migrationBuilder.DropTable(
++                name: "MapLayers");
++        }
++    }
++}
+-- 
+2.17.1.windows.2
+
