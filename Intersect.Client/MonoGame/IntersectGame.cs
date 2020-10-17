@@ -8,6 +8,7 @@ using Intersect.Client.Core;
 using Intersect.Client.Core.Controls;
 using Intersect.Client.Framework.Gwen.Input;
 using Intersect.Client.Framework.Gwen.Renderer;
+using Intersect.Client.Framework.Input;
 using Intersect.Client.General;
 using Intersect.Client.Interface.Game;
 using Intersect.Client.Localization;
@@ -57,8 +58,6 @@ namespace Intersect.Client.MonoGame
             Strings.Load();
 
             mGraphics = new GraphicsDeviceManager(this);
-            mGraphics.PreferredBackBufferWidth = 800;
-            mGraphics.PreferredBackBufferHeight = 480;
             mGraphics.PreferHalfPixelOffset = true;
             mGraphics.PreparingDeviceSettings += (object s, PreparingDeviceSettingsEventArgs args) =>
             {
@@ -77,6 +76,7 @@ namespace Intersect.Client.MonoGame
             Globals.Database.LoadPreferences();
 
             Globals.InputManager = new MonoInput(this);
+            GameClipboard.Instance = new MonoClipboard();
 
             var renderer = new MonoRenderer(mGraphics, Content, this);
             Core.Graphics.Renderer = renderer;
@@ -120,6 +120,11 @@ namespace Intersect.Client.MonoGame
             if (mUpdater != null)
             {
                 LoadUpdaterContent();
+
+                //Set the size of the updater screen before applying graphic changes.
+                //We need to do this here instead of in the constructor for the size change to apply to Linux
+                mGraphics.PreferredBackBufferWidth = 800;
+                mGraphics.PreferredBackBufferHeight = 480;
             }
 
             mGraphics.ApplyChanges();
