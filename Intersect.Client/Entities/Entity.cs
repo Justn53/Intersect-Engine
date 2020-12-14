@@ -266,6 +266,8 @@ namespace Intersect.Client.Entities
                         return Options.Instance.Sprites.CastFrames;
                     case SpriteAnimations.Weapon:
                         return Options.Instance.Sprites.WeaponFrames;
+                    case SpriteAnimations.Gun:
+                        return Options.Instance.Sprites.GunFrames;
                 }
 
                 return Options.Instance.Sprites.NormalFrames;
@@ -946,7 +948,7 @@ namespace Intersect.Client.Entities
                 }
                 else
                 {
-                    if (SpriteAnimation == SpriteAnimations.Normal)
+                    if ((SpriteAnimation == SpriteAnimations.Normal) || (SpriteAnimation == SpriteAnimations.Gun))
                     {
                         var attackTime = CalculateAttackTime();
                         if (AttackTimer - CalculateAttackTime() / 2 > Timing.Global.Ticks / TimeSpan.TicksPerMillisecond || Blocking)
@@ -1118,7 +1120,7 @@ namespace Intersect.Client.Entities
 
                 destRectangle.X = (int) Math.Ceiling(destRectangle.X);
                 destRectangle.Y = (int) Math.Ceiling(destRectangle.Y);
-                if (SpriteAnimation == SpriteAnimations.Normal)
+                if ((SpriteAnimation == SpriteAnimations.Normal) || (SpriteAnimation == SpriteAnimations.Gun))
                 {
                     if (AttackTimer - CalculateAttackTime() / 2 > Timing.Global.Ticks / TimeSpan.TicksPerMillisecond || Blocking)
                     {
@@ -1683,13 +1685,91 @@ namespace Intersect.Client.Entities
             {
                 return;
             }
+            if (Options.WeaponIndex > -1 && Options.WeaponIndex < Equipment.Length)
+            {
+                if (Equipment[Options.WeaponIndex] != Guid.Empty && this != Globals.Me ||
+                    MyEquipment[Options.WeaponIndex] < Options.MaxInvItems)
+                {
+                    var itemId = Guid.Empty;
+                    if (this == Globals.Me)
+                    {
+                        var slot = MyEquipment[Options.WeaponIndex];
+                        if (slot > -1)
+                        {
+                            itemId = Inventory[slot].ItemId;
+                        }
+                    }
+                    else
+                    {
+                        itemId = Equipment[Options.WeaponIndex];
+                    }
 
-            SpriteAnimation = AnimatedTextures[SpriteAnimations.Idle] != null && LastActionTime + Options.Instance.Sprites.TimeBeforeIdle < Globals.System.GetTimeMs() ? SpriteAnimations.Idle : SpriteAnimations.Normal;
-            if (IsMoving)
+                    var item = ItemBase.Get(itemId);
+                    if (item != null)
+                    {
+                        if (AnimatedTextures[SpriteAnimations.Gun] != null && item.ProjectileId != Guid.Empty)
+                        {
+                            SpriteAnimation = AnimatedTextures[SpriteAnimations.Idle] != null && LastActionTime + Options.Instance.Sprites.TimeBeforeIdle < Globals.System.GetTimeMs() ? SpriteAnimations.Idle : SpriteAnimations.Gun;
+                        }
+                        else
+                            SpriteAnimation = AnimatedTextures[SpriteAnimations.Idle] != null && LastActionTime + Options.Instance.Sprites.TimeBeforeIdle < Globals.System.GetTimeMs() ? SpriteAnimations.Idle : SpriteAnimations.Normal;
+                    }
+                    else
+                    {
+                        SpriteAnimation = AnimatedTextures[SpriteAnimations.Idle] != null && LastActionTime + Options.Instance.Sprites.TimeBeforeIdle < Globals.System.GetTimeMs() ? SpriteAnimations.Idle : SpriteAnimations.Normal;
+                    }
+                }
+            }
+            else
+                SpriteAnimation = AnimatedTextures[SpriteAnimations.Idle] != null && LastActionTime + Options.Instance.Sprites.TimeBeforeIdle < Globals.System.GetTimeMs() ? SpriteAnimations.Idle : SpriteAnimations.Normal;
+
+                if (Options.WeaponIndex > -1 && Options.WeaponIndex < Equipment.Length && (IsMoving))
+            {
+                if (Equipment[Options.WeaponIndex] != Guid.Empty && this != Globals.Me ||
+                    MyEquipment[Options.WeaponIndex] < Options.MaxInvItems)
+                {
+                    var itemId = Guid.Empty;
+                    if (this == Globals.Me)
+                    {
+                        var slot = MyEquipment[Options.WeaponIndex];
+                        if (slot > -1)
+                        {
+                            itemId = Inventory[slot].ItemId;
+                        }
+                    }
+                    else
+                    {
+                        itemId = Equipment[Options.WeaponIndex];
+                    }
+
+                    var item = ItemBase.Get(itemId);
+                    if (item != null)
+                    {
+                        if (AnimatedTextures[SpriteAnimations.Gun] != null && item.ProjectileId != Guid.Empty)
+                        {
+                            SpriteAnimation = SpriteAnimations.Gun;
+                            LastActionTime = Globals.System.GetTimeMs();
+                        }
+                        else
+                        {
+                            SpriteAnimation = SpriteAnimations.Normal;
+                            LastActionTime = Globals.System.GetTimeMs();
+                        }
+                    }
+                    else
+                    {
+                        SpriteAnimation = SpriteAnimations.Normal;
+                        LastActionTime = Globals.System.GetTimeMs();
+                    }
+                }   
+                               
+            }
+            else if (IsMoving)
             {
                 SpriteAnimation = SpriteAnimations.Normal;
                 LastActionTime = Globals.System.GetTimeMs();
             }
+
             else if (AttackTimer > Timing.Global.Ticks / TimeSpan.TicksPerMillisecond) //Attacking
             {
                 var timeIn = CalculateAttackTime() - (AttackTimer - Timing.Global.Ticks / TimeSpan.TicksPerMillisecond);
@@ -1759,7 +1839,7 @@ namespace Intersect.Client.Entities
                 LastActionTime = Globals.System.GetTimeMs();
             }
 
-            if (SpriteAnimation == SpriteAnimations.Normal)
+            if ((SpriteAnimation == SpriteAnimations.Normal) || (SpriteAnimation == SpriteAnimations.Gun))
             {
                 ResetSpriteFrame();
             }

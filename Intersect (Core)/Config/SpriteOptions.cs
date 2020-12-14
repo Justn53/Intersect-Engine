@@ -66,5 +66,9 @@ namespace Intersect.Config
         /// Defines the number of rows in sprite sheets which will correlate to the number of directions in the game (Intersect is programmed by default with only 4 directions)
         /// </summary>
         [JsonIgnore] public int Directions => 4;
+        /// <summary>
+        /// Defines the number of frames there will be in weapon attacking sprite sheets
+        /// </summary>
+        public int GunFrames = 4;
     }
 }
