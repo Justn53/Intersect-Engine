@@ -302,9 +302,9 @@ namespace Intersect.GameObjects.Maps
 
         public MapZones ZoneType { get; set; } = MapZones.Normal;
 
-        public int PlayerLightSize { get; set; } = 300;
+        public int PlayerLightSize { get; set; } = 0;
 
-        public byte PlayerLightIntensity { get; set; } = 255;
+        public byte PlayerLightIntensity { get; set; } = 0;
 
         public float PlayerLightExpand { get; set; }
 
